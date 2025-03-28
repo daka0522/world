@@ -1,5 +1,4 @@
-import numpy as np  
-import pygame 
+import numpy as np 
 import time 
 
 """ 
@@ -12,15 +11,30 @@ Logic
 5. Cell can be born in the world.
 """
 
+#set up the colors
+WHITE = np.array([255, 255, 255])
+YELLOW = np.array([255, 255, 0])
+RED = np.array([255, 0, 0])
+BLUE = np.array([0, 0, 255])
+GREEN = np.array([0, 255, 0])
+BLACK = np.array([0, 0, 0])
+ORANGE = np.array([255, 128, 0])
+PURPLE = np.array([128,0,128])
+
+COLORS = [RED, BLUE, GREEN, ORANGE, PURPLE]
+
+
+
+
 class World: 
     """
     World is where all the object lives and dies.
     It gives spaces and some other informations.
     You can set the size of the world.
     """
-    def __init__(self):
-        self.HEIGHT = 5 
-        self.WIDTH = 5 
+    def __init__(self, size: int):
+        self.HEIGHT = size 
+        self.WIDTH = size
 
         self.spaces = np.zeros((self.HEIGHT, self.WIDTH), dtype=Cell)
 
@@ -49,34 +63,42 @@ class Cell:
         self.color = None 
         self.age = 0
         self.born_time = None
-        self.born()
-        self.face = np.random.choice([0, 1, 2, 3])    # clock wise: front=0 -> right=1 -> back=2 -> left=3
+        self.face = None 
 
-    def born(self) -> None:
-        location = self.get_space()
-        if location is None:
-            print("No available space")
+        available_space = self.get_space()
+        if available_space is not None:
+            self.born(available_space)
         else:
-            self.world.lifes_ever += 1 
-            self.name = f"Cell_{self.world.lifes_ever}"
-            self.born_time = time.time()
+            raise Exception("No available space")
 
-            self.world.spaces[location[0], location[1]] = self 
-            self.current_location = location
-            self.alive = True
-            self.color = COLORS[np.random.choice(len(COLORS))]
-            self.world.lifes.append(self)
-    
+    def born(self, available_space) -> None:
+        self.world.spaces[available_space[0], available_space[1]] = self 
+        self.world.lifes.append(self)
+        self.world.lifes_ever += 1 
+        
+        self.alive = True
+        self.current_location = available_space
+        self.born_time = time.time()
+        self.face = np.random.choice([0, 1, 2, 3])    # clock wise: front=0 -> right=1 -> back=2 -> left=3
+        self.name = f"Cell_{self.world.lifes_ever}"
+        self.color = COLORS[np.random.choice(len(COLORS))] 
+
     def die(self) -> None:
         if self.alive: 
-            location = np.where(self.world.spaces == self)
-            self.world.spaces[location[0], location[1]] = 0
+            row, col = self.current_location
+            if self.world.spaces[row, col] == self:
+                self.world.spaces[row, col] = 0
+            
             self.alive = False
             self.color = None 
+            self.current_location = None 
+
+            if self in self.world.lifes:
+                self.world.lifes.remove(self)
         else:
             print("Cell is already dead")
 
-    def get_space(self) -> None| np.ndarray:
+    def get_space(self) -> None | np.ndarray:
         available_spaces = self.world.get_avialable_spaces()
         len_available_space = len(available_spaces)
         if len_available_space == 0:
@@ -110,17 +132,19 @@ class Cell:
         Secondly, it should have a logic to bump with other cells.
         """
         if self.face == 0:  # front
-            new_location = self.current_location + np.array([0, -1])
+            new_location = self.current_location + np.array([-1, 0])
         elif self.face == 1:    # right
-            new_location = self.current_location + np.array([1, 0])
-        elif self.face == 2:    # back
             new_location = self.current_location + np.array([0, 1])
+        elif self.face == 2:    # back
+            new_location = self.current_location + np.array([1, 0])
         elif self.face == 3:    # left
-            new_location = self.current_location + np.array([-1, 0]) 
+            new_location = self.current_location + np.array([0, -1]) 
         else:
             raise ValueError("Unknown face value. It must be {0, 1, 2, 3}")
         
-        if 0 <= new_location[0] < self.world.HEIGHT and 0 <= new_location[1] < self.world.WIDTH:
+        return new_location
+
+        """ if 0 <= new_location[0] < self.world.HEIGHT and 0 <= new_location[1] < self.world.WIDTH:
             # print(f"Can move to {new_location}")
 
             # if move to new location, then update to self.world spaces. 1.remove past location, 2.add new location
@@ -131,15 +155,49 @@ class Cell:
         else:
             print(f"Impossible to move to {new_location}. Please turn your face.")
             self.turn_face()
-            return self.current_location
+            return self.current_location """
         
-    def move(self):
-        self.current_location = self.search_to_move()
+    def ask_next_move(self):
+        """ 
+        1. Cell sends a location of next move to World.
+        2. World respond to the cell, what's in the location it asked.
+        """
+        new_location = self.search_to_move()
+        if 0 <= new_location[0] < self.world.HEIGHT and 0 <= new_location[1] < self.world.WIDTH:
+            next_step = self.world.spaces[new_location[0], new_location[1]] 
+
+            # print(f"search_to_move: {self.search_to_move()}")
+            # print(f"next_step: {next_step}")
+
+            if next_step == 0: # 0 means empty, so free to move
+                self.move(new_location)
+            else:
+                self.turn_face()
+        else:
+            self.turn_face()
+            # print("Not available to move next")
+
+    def move(self, new_location):
+
+        # Clear old location
+        row, col = self.current_location 
+        if self.world.spaces[row, col] == self:
+            self.world.spaces[row, col] = 0
+        # self.world.spaces = np.where(self.world.spaces == self, 0, self.world.spaces)
+        
+        # Update world spaces info
+        self.current_location = new_location
+        self.world.spaces[new_location[0], new_location[1]] = self
 
     def turn_face(self):
         # random choice
-        new_face = np.where(self.face != [0, 1, 2, 3])[0]
+        new_face = np.where(self.face != [0, 1, 2, 3])[0] # except its previous face
+        # faces = [0, 1, 2, 3]
+        # faces.remove(self.face)
+        # print(f"new face: {faces}")
+        # self.face = np.random.choice(faces)
         self.face = np.random.choice(new_face)
+
 
 
 class Food:
@@ -152,7 +210,7 @@ class Food:
         self.world = world 
         self.alive = False
         self.current_location = None 
-        self.color = YELLOW
+        self.color = np.array([255, 255, 0]) # YELLOW = np.array([255, 255, 0])
         self.born()
 
     def born(self):
@@ -193,136 +251,3 @@ class Food:
             return f"{self.name}" 
         else: 
             return "Unborn Cell"
-""" 
-=====================================================================================
-2. Rendering the world
-"""
-
-# pygame setup
-DISPLAY_WIDTH = 500
-HEIGHT = 700
-
-pygame.init()
-screen = pygame.display.set_mode((DISPLAY_WIDTH, HEIGHT))
-clock = pygame.time.Clock()
-running = True  
-
-
-#set up the colors
-WHITE = np.array([255, 255, 255])
-YELLOW = np.array([255, 255, 0])
-RED = np.array([255, 0, 0])
-BLUE = np.array([0, 0, 255])
-GREEN = np.array([0, 255, 0])
-BLACK = np.array([0, 0, 0])
-ORANGE = np.array([255, 128, 0])
-PURPLE = np.array([128,0,128])
-
-COLORS = [RED, BLUE, GREEN, ORANGE, PURPLE]
-
-
-def render_world(world: World) -> None:
-    grid_color = WHITE 
-
-    tile_width = DISPLAY_WIDTH // world.WIDTH
-    tile_height = HEIGHT // world.HEIGHT
-
-    for x in range(0, DISPLAY_WIDTH, tile_width):
-        pygame.draw.line(screen, grid_color, (x, 0), (x, HEIGHT))
-    for y in range(0, HEIGHT, tile_height):
-        pygame.draw.line(screen, grid_color, (0, y), (DISPLAY_WIDTH, y))
-
-
-def render_cell(cell: Cell, world: World, color=RED) -> None:
-    """
-    Render cell 
-
-    Parameters
-    ---------
-    cell: Cell
-    world: World
-    color: (int, int, int)
-        RGB value 0~255
-    """
-    width = DISPLAY_WIDTH // world.WIDTH
-    height = HEIGHT // world.HEIGHT
-
-    if cell.alive:
-        x, y = cell.current_location
-        x_position = x * width
-        y_position = y * height
-
-        rect = pygame.Rect(x_position, y_position, width, height) # (x, y, width, height)
-
-        pygame.draw.rect(screen, color, rect)
-
-        # render face
-        if hasattr(cell, "face"):
-            if cell.face == 0:
-                arrow = "Front"
-            elif cell.face == 1:
-                arrow = "Right"
-            elif cell.face == 2:
-                arrow = "Back"
-            elif cell.face == 3:
-                arrow = "Left"
-            myfont = pygame.font.SysFont("Comic Sans MS", 20)
-            label = myfont.render(f"{cell.name}, {cell.face} {arrow}, ({x_position}, {y_position})", 1, WHITE)
-            screen.blit(label, (x_position, y_position))
-
-world = World()
-
-c1 = Cell(world)
-# c2 = Cell(world)
-# c3 = Cell(world)
-# c4 = Cell(world)
-
-
-food1 = Food(world)
-
-"""
-==============================================================
-running
-"""
-
-while running:
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
-            running = False
-
-    screen.fill(BLACK)
-
-    render_world(world)
-
-    # if world.get_avialable_spaces().size == 0: 
-    #     print("--------No available space--------")
-    # else: 
-    #     c = Cell(world)
-
-    # for cell in world.lifes:
-    #     render_cell(cell, world, cell.color)
-    #     cell.aging()
-    render_cell(c1, world, c1.color)
-    render_cell(food1, world, food1.color)
-
-    c1.move()
-
-    # # elapsed_time = np.round(time.time() - c1.born_time)
-    # # print(f"elapsed time: {elapsed_time}, color: {c1.color}")
-
-    # c1.color = (c1.color * 0.9).astype(int)
-
-
-    # render_cell(c2, world, c2.color)
-    # render_cell(c3, world, c3.color)
-    # render_cell(c4, world, c4.color)
-
-    # c2.move()
-    # c3.move()
-    # c4.move()
-
-    print(f"world.spaces: \n {world.spaces} \n \n")
-
-    pygame.display.flip()
-    clock.tick(1)
-pygame.quit()
