@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cell Simulation (TS)</title>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column; /* Stack elements vertically */
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-color: #222; /* Darker background */
+            color: white;
+            font-family: sans-serif;
+            margin: 0;
+        }
+        canvas {
+            border: 1px solid #555; /* Slightly lighter border */
+            background-color: black;
+            margin-top: 10px; /* Add some space above canvas */
+        }
+        #info {
+            margin-top: 15px;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body>
+    <h1>Cell Simulation</h1>
+    <canvas id="gameCanvas"></canvas>
+    <div id="info">
+        Cells: <span id="cellCount">0</span> |
+        Food: <span id="foodCount">0</span>
+    </div>
+
+    <!-- This will be generated from simulation.ts -->
+    <script src="simulation.js"></script>
+</body>
+</html>

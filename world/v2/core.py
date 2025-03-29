@@ -1,5 +1,6 @@
 import numpy as np 
 import time 
+from collections import defaultdict
 
 """ 
 =====================================================================================
@@ -36,67 +37,38 @@ class World:
         self.HEIGHT = size 
         self.WIDTH = size
 
-        self.spaces = np.zeros((self.HEIGHT, self.WIDTH), dtype=Cell)
+        self.spaces: np.ndarray = np.zeros((self.HEIGHT, self.WIDTH), dtype=object)
 
-        self.lifes_ever = 0
-        self.lifes = []
+        self.matter: dict[str, any] = defaultdict(list)
+        self.matter_count: dict[str, int] = defaultdict(int)
 
-        self.foods_ever = 0
-        self.foods = []
 
     def get_avialable_spaces(self) -> np.ndarray[np.ndarray[int], np.ndarray[int]]:
         """Search a free space and give it back."""
         return np.stack(np.where(self.spaces == 0), axis=1)
 
 
-class Cell: 
-    """ 
-    Cell is a living one. it's born with name, age, color, face(direction).
-    1. born: born with a given world
-    2. die: die itself
-    3. move: move somewhere
-       """
+class Matter:
+    """
+    Proto type of life.
+    Sub classes: Cell, Food
+    """
     def __init__(self, world: World) -> None:
-        self.world = world
-        self.alive = False 
+        self.world: World = world
+        self.is_alive = False 
         self.current_location = None 
-        self.color = None 
-        self.age = 0
-        self.born_time = None
-        self.face = None 
+        self.color: tuple[int, int, int] = None
+        self.age: int = 0 
+        self.born_time: time.time = None 
+        self.name: str = None 
+        self.class_name: str = self.__class__.__qualname__
 
+        # If there's free space, then it can born.
         available_space = self.get_space()
-        if available_space is not None:
-            self.born(available_space)
-        else:
+        if available_space is None:
             raise Exception("No available space")
-
-    def born(self, available_space) -> None:
-        self.world.spaces[available_space[0], available_space[1]] = self 
-        self.world.lifes.append(self)
-        self.world.lifes_ever += 1 
-        
-        self.alive = True
-        self.current_location = available_space
-        self.born_time = time.time()
-        self.face = np.random.choice([0, 1, 2, 3])    # clock wise: front=0 -> right=1 -> back=2 -> left=3
-        self.name = f"Cell_{self.world.lifes_ever}"
-        self.color = COLORS[np.random.choice(len(COLORS))] 
-
-    def die(self) -> None:
-        if self.alive: 
-            row, col = self.current_location
-            if self.world.spaces[row, col] == self:
-                self.world.spaces[row, col] = 0
-            
-            self.alive = False
-            self.color = None 
-            self.current_location = None 
-
-            if self in self.world.lifes:
-                self.world.lifes.remove(self)
         else:
-            print("Cell is already dead")
+            self.born(available_space)
 
     def get_space(self) -> None | np.ndarray:
         available_spaces = self.world.get_avialable_spaces()
@@ -106,29 +78,74 @@ class Cell:
         else:
             location = np.random.choice(len_available_space)
             return available_spaces[location]
+        
+    def born(self, available_space) -> None:
+        self.world.spaces[available_space[0], available_space[1]] = self 
+        self.world.matter[self.class_name].append(self) # for examples: 'Cell': [instacnes..]
+        self.world.matter_count[self.class_name] += 1
+
+        self.is_alive = True
+        self.current_location = available_space
+        self.born_time = time.time()
+        self.name = f"{self.class_name}_{self.world.matter_count[self.class_name]}"
+        self.color = COLORS[np.random.choice(len(COLORS))] 
+    
+    def die(self) -> None: 
+        if self.is_alive: 
+            row, col = self.current_location
+            if self.world.spaces[row, col] == self:
+                self.world.spaces[row, col] = 0
             
+            self.is_alive = False
+            self.color = None 
+            self.current_location = None 
+
+            if self in self.world.matter[self.class_name]:
+                self.world.matter[self.class_name].remove(self)
+        else:
+            print(f"{self.name} is already dead")
+
     def __repr__(self):
-        if self.alive:
-            return f"{self.name}" 
+        if self.is_alive:
+            return f"{self.name}is is_alive." 
         else: 
-            return "Unborn Cell"
+            return f"Unborn {self.class_name}"
+
+class Cell(Matter): 
+    """ 
+    Cell is a living one. it's born with name, age, color, face(direction).
+    1. born: born with a given world
+    2. die: die itself
+    3. move: move somewhere
+    4. eat
+       """
+    def __init__(self, world: World) -> None:
+        # Only for cell(mover).
+        self.face: int[0, 1, 2, 3] = None 
+
+        super().__init__(world)
+
+
+    def born(self, available_space) -> None:
+        super().born(available_space)
+        self.face = np.random.choice([0, 1, 2, 3])    # clock wise: front=0 -> right=1 -> back=2 -> left=3
 
     # Aging system
     def aging(self) -> None:
         current_time = time.time()
         elapsed_time = np.round(current_time - self.born_time, 2)
 
-        if self.alive and elapsed_time % 5:
+        if self.is_alive and elapsed_time % 5:
             self.age += 1 
-            self.color = self.color * 0.9
+            self.color = self.color * 0.975
 
-            if self.age > 10:
+            if self.age > 100:
                 self.die()
     
     def search_to_move(self):
         """
         Try to move with face(direction), get new location to move.
-        There's some rules. It cant' move beyond the world mpa. So, the widht and height of the world.
+        There's some rules. It cant' move beyond the world map. So, the widht and height of the world.
         Secondly, it should have a logic to bump with other cells.
         """
         if self.face == 0:  # front
@@ -141,21 +158,7 @@ class Cell:
             new_location = self.current_location + np.array([0, -1]) 
         else:
             raise ValueError("Unknown face value. It must be {0, 1, 2, 3}")
-        
         return new_location
-
-        """ if 0 <= new_location[0] < self.world.HEIGHT and 0 <= new_location[1] < self.world.WIDTH:
-            # print(f"Can move to {new_location}")
-
-            # if move to new location, then update to self.world spaces. 1.remove past location, 2.add new location
-            self.world.spaces = np.where(self.world.spaces == self, 0, self.world.spaces)
-            self.world.spaces[new_location[0], new_location[1]] = self
-
-            return new_location
-        else:
-            print(f"Impossible to move to {new_location}. Please turn your face.")
-            self.turn_face()
-            return self.current_location """
         
     def ask_next_move(self):
         """ 
@@ -166,11 +169,14 @@ class Cell:
         if 0 <= new_location[0] < self.world.HEIGHT and 0 <= new_location[1] < self.world.WIDTH:
             next_step = self.world.spaces[new_location[0], new_location[1]] 
 
-            # print(f"search_to_move: {self.search_to_move()}")
             # print(f"next_step: {next_step}")
 
-            if next_step == 0: # 0 means empty, so free to move
+            # If it's empty then go. 0 means empty, so free to move
+            if next_step == 0: 
                 self.move(new_location)
+            # If it's a food then eat it.
+            elif isinstance(next_step, Food):
+                self.eat(next_step)
             else:
                 self.turn_face()
         else:
@@ -178,7 +184,6 @@ class Cell:
             # print("Not available to move next")
 
     def move(self, new_location):
-
         # Clear old location
         row, col = self.current_location 
         if self.world.spaces[row, col] == self:
@@ -189,65 +194,23 @@ class Cell:
         self.current_location = new_location
         self.world.spaces[new_location[0], new_location[1]] = self
 
-    def turn_face(self):
+    def turn_face(self) -> None:
         # random choice
         new_face = np.where(self.face != [0, 1, 2, 3])[0] # except its previous face
-        # faces = [0, 1, 2, 3]
-        # faces.remove(self.face)
-        # print(f"new face: {faces}")
-        # self.face = np.random.choice(faces)
         self.face = np.random.choice(new_face)
 
+    def eat(self, food) -> None:
+        food.die()
 
 
-class Food:
+class Food(Matter):
     """
     food for cell
     1. location
-    2. state {alive, dead}
+    2. state {is_alive, dead}
     """
     def __init__(self, world: World):
-        self.world = world 
-        self.alive = False
-        self.current_location = None 
-        self.color = np.array([255, 255, 0]) # YELLOW = np.array([255, 255, 0])
-        self.born()
+        super().__init__(world)
 
-    def born(self):
-        location = self.get_space()
-        if location is None:
-            raise Warning("No available space")
-        else:
-            self.world.foods_ever += 1 
-            self.name = f"Food_{self.world.lifes_ever}"
-            self.born_time = time.time()
-
-            self.world.spaces[location[0], location[1]] = self 
-            self.current_location = location
-            self.alive = True
-            self.world.foods.append(self)
     
-    def die(self):
-        if self.alive: 
-            location = np.where(self.world.spaces == self)
-            self.world.spaces[location[0], location[1]] = 0
-            self.alive = False
-            self.color = None 
-            self.foods.remove(self)
-        else:
-            print(f"{self} is already dead")
         
-    def get_space(self):
-        available_spaces = self.world.get_avialable_spaces()
-        len_available_space = len(available_spaces)
-        if len_available_space == 0:
-            return None
-        else:
-            location = np.random.choice(len_available_space)
-            return available_spaces[location]
-
-    def __repr__(self):
-        if self.alive:
-            return f"{self.name}" 
-        else: 
-            return "Unborn Cell"

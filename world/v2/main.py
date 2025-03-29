@@ -1,6 +1,6 @@
 import numpy as np 
 import pygame 
-from core import World, Cell 
+from core import World, Cell, Food
 
 
 """ 
@@ -58,7 +58,7 @@ def render_cell(cell: Cell, world: World, color=RED, rendering_face=False) -> No
     width = DISPLAY_WIDTH / world.WIDTH
     height = DISPLAY_HEIGHT / world.HEIGHT
 
-    if cell.alive:
+    if cell.is_alive:
         row, col = cell.current_location
         x_position = col * height
         y_position = row * width
@@ -96,17 +96,6 @@ def render_face(cell: Cell, x_position, y_position):
 
 world = World(10) # size
 
-c1 = Cell(world)
-
-
-c2 = Cell(world)
-
-c3 = Cell(world)
-
-c4 = Cell(world)
-
-
-# food1 = Food(world)
 
 
 
@@ -127,27 +116,25 @@ while running:
     if world.get_avialable_spaces().size == 0: 
         print("--------No available space--------")
     else: 
-        c = Cell(world)
+        while len(world.matter["Cell"]) < 3:
+            c = Cell(world)
 
-    for cell in world.lifes:
+        while len(world.matter["Food"]) < 3:
+            f = Food(world)
+
+
+    
+    for cell in world.matter["Cell"]:
         render_cell(cell, world, cell.color)
         cell.ask_next_move()
+        # cell.aging()
 
-    
-    # render_cell(c1, world, c1.color, rendering_face=True)
-    # c1.ask_next_move()
+        # if cell.age > 30:
+        #     cell.die()
 
+    for food in world.matter["Food"]:
+        render_cell(food, world, YELLOW)
 
-    # render_cell(c2, world, c2.color)
-    # c2.ask_next_move()
-    
-    # render_cell(c3, world, c3.color)
-    # c3.ask_next_move()
-    
-    # render_cell(c4, world, c4.color)
-    # c4.ask_next_move()
-
-    # render_cell(food1, world, food1.color)
 
     # print(f"face: {c1.face}, location: {c1.current_location} \n")
     print(f"world.spaces: \n {world.spaces} \n \n")
