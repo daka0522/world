@@ -9,7 +9,7 @@ from core import World, Cell, Food
 """
 
 # pygame setup
-size = 500
+size = 800
 DISPLAY_WIDTH = size
 DISPLAY_HEIGHT = size 
 
@@ -82,19 +82,22 @@ def render_face(cell: Cell, x_position, y_position):
             arrow = "Back"
         elif cell.face == 3:
             arrow = "Left"
-        myfont = pygame.font.SysFont("Comic Sans MS", 12)
+        myfont = pygame.font.SysFont("Comic Sans MS", 10)
         label = myfont.render(f"{cell.name}", 1, WHITE, BLACK)
         label2 = myfont.render(f"{cell.face} {arrow}", 1, WHITE, BLACK)
         label3 = myfont.render(f"{cell.current_location}, ({np.round(x_position)}, {np.round(y_position)})", 1, WHITE, BLACK)
+        label4 = myfont.render(f"E: {cell.energy}, Age: {cell.age}", 1, WHITE, BLACK)
+
+        # Rendering
         screen.blit(label, (x_position+10, y_position+10))
-        screen.blit(label2, (x_position+10, y_position+30))
-        screen.blit(label3, (x_position+10, y_position+50))
+        # screen.blit(label2, (x_position+10, y_position+30))
+        # screen.blit(label3, (x_position+10, y_position+50))
+        screen.blit(label4, (x_position+10, y_position+30))
 
 
 
 
-
-world = World(10) # size
+world = World(20) # size
 
 
 
@@ -116,21 +119,21 @@ while running:
     if world.get_avialable_spaces().size == 0: 
         print("--------No available space--------")
     else: 
-        while len(world.matter["Cell"]) < 3:
+        while len(world.matter["Cell"]) < 50:
             c = Cell(world)
 
-        while len(world.matter["Food"]) < 3:
+        while len(world.matter["Food"]) < 10:
             f = Food(world)
 
 
     
     for cell in world.matter["Cell"]:
-        render_cell(cell, world, cell.color)
+        render_cell(cell, world, cell.color, rendering_face=False)
         cell.ask_next_move()
-        # cell.aging()
+        cell.aging()
 
-        # if cell.age > 30:
-        #     cell.die()
+        if cell.energy <= 0 or cell.age > 100:
+            cell.die()
 
     for food in world.matter["Food"]:
         render_cell(food, world, YELLOW)
@@ -140,5 +143,5 @@ while running:
     print(f"world.spaces: \n {world.spaces} \n \n")
 
     pygame.display.flip()
-    clock.tick(30)
+    clock.tick(10)
 pygame.quit()

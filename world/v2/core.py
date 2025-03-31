@@ -33,7 +33,7 @@ class World:
     It gives spaces and some other informations.
     You can set the size of the world.
     """
-    def __init__(self, size: int):
+    def __init__(self, size: int=10):
         self.HEIGHT = size 
         self.WIDTH = size
 
@@ -56,7 +56,7 @@ class Matter:
     def __init__(self, world: World) -> None:
         self.world: World = world
         self.is_alive = False 
-        self.current_location = None 
+        self.current_location: tuple[int, int] | None = None 
         self.color: tuple[int, int, int] = None
         self.age: int = 0 
         self.born_time: time.time = None 
@@ -111,6 +111,18 @@ class Matter:
         else: 
             return f"Unborn {self.class_name}"
 
+
+class Food(Matter):
+    """
+    food for cell
+    1. location
+    2. state {is_alive, dead}
+    """
+    def __init__(self, world: World):
+        super().__init__(world)
+        self.energy: int = 20
+
+
 class Cell(Matter): 
     """ 
     Cell is a living one. it's born with name, age, color, face(direction).
@@ -122,9 +134,10 @@ class Cell(Matter):
     def __init__(self, world: World) -> None:
         # Only for cell(mover).
         self.face: int[0, 1, 2, 3] = None 
+        self.energy = 50
+        self.MAX_ENERGY = 100
 
         super().__init__(world)
-
 
     def born(self, available_space) -> None:
         super().born(available_space)
@@ -142,20 +155,25 @@ class Cell(Matter):
             if self.age > 100:
                 self.die()
     
-    def search_to_move(self):
+    def sense_front(self, sense_reach: int = 1):
         """
         Try to move with face(direction), get new location to move.
         There's some rules. It cant' move beyond the world map. So, the widht and height of the world.
         Secondly, it should have a logic to bump with other cells.
+        
+        Parameters
+        ----------
+
+        sense_reach: how far to sense (window size)
         """
         if self.face == 0:  # front
-            new_location = self.current_location + np.array([-1, 0])
+            new_location = self.current_location + np.array([-sense_reach, 0])
         elif self.face == 1:    # right
-            new_location = self.current_location + np.array([0, 1])
+            new_location = self.current_location + np.array([0, sense_reach])
         elif self.face == 2:    # back
-            new_location = self.current_location + np.array([1, 0])
+            new_location = self.current_location + np.array([sense_reach, 0])
         elif self.face == 3:    # left
-            new_location = self.current_location + np.array([0, -1]) 
+            new_location = self.current_location + np.array([0, -sense_reach]) 
         else:
             raise ValueError("Unknown face value. It must be {0, 1, 2, 3}")
         return new_location
@@ -165,52 +183,51 @@ class Cell(Matter):
         1. Cell sends a location of next move to World.
         2. World respond to the cell, what's in the location it asked.
         """
-        new_location = self.search_to_move()
-        if 0 <= new_location[0] < self.world.HEIGHT and 0 <= new_location[1] < self.world.WIDTH:
-            next_step = self.world.spaces[new_location[0], new_location[1]] 
+        new_location = self.sense_front()
+        inside_world = 0 <= new_location[0] < self.world.HEIGHT and 0 <= new_location[1] < self.world.WIDTH
+        
+        if inside_world:
+            whats_next = self.world.spaces[new_location[0], new_location[1]] 
 
-            # print(f"next_step: {next_step}")
+            # print(f"whats_next: {whats_next}")
 
             # If it's empty then go. 0 means empty, so free to move
-            if next_step == 0: 
+            if whats_next == 0 and self.energy > 10: 
+
                 self.move(new_location)
             # If it's a food then eat it.
-            elif isinstance(next_step, Food):
-                self.eat(next_step)
+            elif isinstance(whats_next, Food):
+                self.eat(whats_next)
             else:
                 self.turn_face()
         else:
             self.turn_face()
             # print("Not available to move next")
 
-    def move(self, new_location):
+    def move(self, new_location) -> None:
         # Clear old location
         row, col = self.current_location 
         if self.world.spaces[row, col] == self:
             self.world.spaces[row, col] = 0
-        # self.world.spaces = np.where(self.world.spaces == self, 0, self.world.spaces)
         
         # Update world spaces info
         self.current_location = new_location
         self.world.spaces[new_location[0], new_location[1]] = self
+
+        # consumtion and aging option: age +1 per a move.
+        # self.age += 1
+        self.energy -= 1
 
     def turn_face(self) -> None:
         # random choice
         new_face = np.where(self.face != [0, 1, 2, 3])[0] # except its previous face
         self.face = np.random.choice(new_face)
 
-    def eat(self, food) -> None:
+    def eat(self, food: Food) -> None:
+        self.energy += food.energy
         food.die()
 
 
-class Food(Matter):
-    """
-    food for cell
-    1. location
-    2. state {is_alive, dead}
-    """
-    def __init__(self, world: World):
-        super().__init__(world)
 
-    
+
         
