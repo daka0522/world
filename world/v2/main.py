@@ -1,7 +1,8 @@
 import numpy as np 
 import pygame 
-from core import World, Cell, Food
-
+# from core import World, Cell, Food
+from type_test import World, Cell, Food
+from params import Color, _color
 
 """ 
 =====================================================================================
@@ -19,21 +20,8 @@ clock = pygame.time.Clock()
 running = True  
 
 
-#set up the colors
-WHITE = np.array([255, 255, 255])
-YELLOW = np.array([255, 255, 0])
-RED = np.array([255, 0, 0])
-BLUE = np.array([0, 0, 255])
-GREEN = np.array([0, 255, 0])
-BLACK = np.array([0, 0, 0])
-ORANGE = np.array([255, 128, 0])
-PURPLE = np.array([128,0,128])
-
-COLORS = [RED, BLUE, GREEN, ORANGE, PURPLE]
-
-
 def render_world(world: World) -> None:
-    grid_color = WHITE 
+    grid_color = tuple(Color.WHITE )
 
     tile_width = DISPLAY_WIDTH // world.WIDTH
     tile_height = DISPLAY_HEIGHT // world.HEIGHT
@@ -43,13 +31,13 @@ def render_world(world: World) -> None:
     for y in range(0, DISPLAY_HEIGHT, tile_height):
         pygame.draw.line(screen, grid_color, (0, y), (DISPLAY_WIDTH, y))
 
-def render_cell(cell: Cell, world: World, color=RED, rendering_face=False) -> None:
+def render_matter(matter: Cell | Food, world: World, color: _color = Color.RED, rendering_face=False) -> None:
     """
-    Render cell 
+    Render matter 
 
     Parameters
     ---------
-    cell: Cell
+    matter: Cell | Food
     world: World
     color: (int, int, int)
         RGB value 0~255
@@ -58,16 +46,17 @@ def render_cell(cell: Cell, world: World, color=RED, rendering_face=False) -> No
     width = DISPLAY_WIDTH / world.WIDTH
     height = DISPLAY_HEIGHT / world.HEIGHT
 
-    if cell.is_alive:
-        row, col = cell.current_location
-        x_position = col * height
-        y_position = row * width
+    if matter.is_alive:
+        if matter.current_location is not None:
+            row, col = matter.current_location
+            x_position = col * height
+            y_position = row * width
 
-        rect = pygame.Rect(x_position, y_position, width, height) # (x, y, width, height)
-        pygame.draw.rect(screen, color, rect)
+            rect = pygame.Rect(x_position, y_position, width, height) # (x, y, width, height)
+            pygame.draw.rect(screen, tuple(color), rect)
 
-        if rendering_face:
-            render_face(cell, x_position, y_position)
+            if type(matter) is Cell and rendering_face:
+                render_face(matter, x_position, y_position)
 
 
 
@@ -82,11 +71,14 @@ def render_face(cell: Cell, x_position, y_position):
             arrow = "Back"
         elif cell.face == 3:
             arrow = "Left"
+        else:
+            arrow = "None"
+
         myfont = pygame.font.SysFont("Comic Sans MS", 10)
-        label = myfont.render(f"{cell.name}", 1, WHITE, BLACK)
-        label2 = myfont.render(f"{cell.face} {arrow}", 1, WHITE, BLACK)
-        label3 = myfont.render(f"{cell.current_location}, ({np.round(x_position)}, {np.round(y_position)})", 1, WHITE, BLACK)
-        label4 = myfont.render(f"E: {cell.energy}, Age: {cell.age}", 1, WHITE, BLACK)
+        label = myfont.render(f"{cell.name}", 1, tuple(Color.WHITE), tuple(Color.BLACK))
+        label2 = myfont.render(f"{cell.face} {arrow}", 1, tuple(Color.WHITE), tuple(Color.BLACK))
+        label3 = myfont.render(f"{cell.current_location}, ({np.round(x_position)}, {np.round(y_position)})", 1, tuple(Color.WHITE), tuple(Color.BLACK))
+        label4 = myfont.render(f"E: {cell.energy}, Age: {cell.age}", 1, tuple(Color.WHITE), tuple(Color.BLACK))
 
         # Rendering
         screen.blit(label, (x_position+10, y_position+10))
@@ -97,7 +89,7 @@ def render_face(cell: Cell, x_position, y_position):
 
 
 
-world = World(20) # size
+world = World(75) # size
 
 
 
@@ -112,36 +104,42 @@ while running:
         if event.type == pygame.QUIT:
             running = False
 
-    screen.fill(BLACK)
+    screen.fill(tuple(Color.BLACK))
 
     # render_world(world)
 
     if world.get_avialable_spaces().size == 0: 
         print("--------No available space--------")
     else: 
-        while len(world.matter["Cell"]) < 50:
-            c = Cell(world)
+        c = Cell(world)
 
-        while len(world.matter["Food"]) < 10:
-            f = Food(world)
+        # while len(world.matter["Cell"]) < 50:
+        #     c = Cell(world)
+
+        # while len(world.matter["Food"]) < 10:
+        #     f = Food(world)
 
 
     
     for cell in world.matter["Cell"]:
-        render_cell(cell, world, cell.color, rendering_face=False)
-        cell.ask_next_move()
-        cell.aging()
+        if type(cell) is Cell:
+            render_matter(cell, world, cell.color, rendering_face=False)
+            
+            cell.ask_next_move()
+            
+            # cell.aging()
 
-        if cell.energy <= 0 or cell.age > 100:
-            cell.die()
+            # if cell.energy <= 0 or cell.age > 100:
+            #     cell.die()
 
     for food in world.matter["Food"]:
-        render_cell(food, world, YELLOW)
+        if type(food) is Food:
+            render_matter(food, world, Color.YELLOW)
 
 
     # print(f"face: {c1.face}, location: {c1.current_location} \n")
     print(f"world.spaces: \n {world.spaces} \n \n")
 
     pygame.display.flip()
-    clock.tick(10)
+    clock.tick(60)
 pygame.quit()
