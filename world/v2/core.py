@@ -13,8 +13,9 @@ Logic
 5. Cell can be born in the world.
 """
 
-
 type _location = None | np.ndarray[tuple[int, int], np.dtype[np.signedinteger]]
+type _face = int | None | np.ndarray
+
 
 class World: 
     """
@@ -38,7 +39,7 @@ class World:
         """Search a free space and give it back."""
         return np.stack(np.where(self.spaces == 0), axis=1)
 
-# type _matter[T] = Matter | Cell | Food 
+
 
 class Matter:
     """
@@ -99,7 +100,7 @@ class Matter:
 
     def __repr__(self):
         if self.is_alive:
-            return f"{self.name}is_alive." 
+            return f"{self.name}" 
         else: 
             return f"Unborn {self.class_name}"
 
@@ -115,18 +116,14 @@ class Food(Matter):
         self.energy: int = 20
 
 
-
-type _face = int | None | np.ndarray
-
 class Cell(Matter): 
-   
     """ 
     Cell is a living one. it's born with name, age, color, face(direction).
     1. born: born with a given world
     2. die: die itself
     3. move: move somewhere
     4. eat
-       """
+    """
     def __init__(self, world: World) -> None:
         # Only for cell(mover).
         self.face: _face = 1 
@@ -167,7 +164,6 @@ class Cell(Matter):
             new_location = self.current_location + np.array([0, -sense_reach]) 
         else:
             raise Exception("Unknown face value. It must be {0, 1, 2, 3}")
-            # return None
         return new_location
         
     def ask_next_move(self) -> None:
@@ -182,9 +178,6 @@ class Cell(Matter):
             
             if inside_world:
                 whats_next = self.world.spaces[new_location[0], new_location[1]] 
-
-                # print(f"whats_next: {whats_next}")
-
                 # If it's empty then go. 0 means empty, so free to move
                 if whats_next == 0: 
                     self.move(new_location)
@@ -249,7 +242,3 @@ class Cell(Matter):
             if self.age > 100:
                 self.die()
     
-
-
-
-        

@@ -15,15 +15,17 @@ class Env:
             reward: int = -1
         return reward 
 
+type _state = np.ndarray[tuple[int, int], np.dtype]
+
 class Agent:
     def __init__(self, env: Env):
-        self.state: np.ndarray[int, int] = np.array((3, 0)) # initial location, current location
+        self.state: _state = np.array((3, 0)) # initial location, current location
         self.actions: list[int] = [1, 2, 3, 4] # up, right, down, left
         self.reward: int = 0        
-        self.memory: np.ndarray = np.zeros((env.HEIGHT, env.WIDTH, len(self.actions)), dtype=int)
+        self.memory: np.ndarray[tuple[int, ...], np.dtype] = np.zeros((env.HEIGHT, env.WIDTH, len(self.actions)), dtype=int)
 
     def expect(self, state: tuple[int, int]):
-        history_of_state: np.ndarray[int] = self.memory[state[0], state[1]]
+        history_of_state: list[_state] = self.memory[state[0], state[1]]
         return history_of_state
     
     def best_action(self, history_of_state, epsilon=0.1):
