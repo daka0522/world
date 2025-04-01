@@ -1,383 +1,580 @@
-// --- Type Definitions ---
-type Point = { x: number; y: number };
-type RgbColor = { r: number; g: number; b: number };
+// Based on params.py, core.py, main.py
 
-// --- Canvas Setup ---
-const canvas = document.getElementById('gameCanvas') as HTMLCanvasElement;
-const ctx = canvas.getContext('2d')!; // Non-null assertion: we know the canvas exists
+// --- Constants (from params.py and main.py) ---
+const GRID_SIZE = 30; // World size (adjust as needed)
+const CANVAS_SIZE = 600; // Display size in pixels
+const TILE_SIZE = CANVAS_SIZE / GRID_SIZE;
 
-// --- Info Display ---
+const INITIAL_CELLS = 10; // Start with some cells
+const MAX_CELLS = 50;     // Limit cell population
+const INITIAL_FOOD = 30; // Start with some food
+const MAX_FOOD = 60;      // Limit food population
+
+const CELL_MAX_ENERGY = 100; //
+const CELL_START_ENERGY = 50; //
+const FOOD_ENERGY = 20;      //
+const MOVE_ENERGY_COST = 1;  //
+const CELL_MAX_AGE_STEPS = 500; // Aging based on simulation steps
+
+const SIMULATION_SPEED_MS = 100; // Update simulation logic every X ms
+const RL_EPSILON = 0.1; // Exploration factor for RL
+
+// Colors adapted from params.py
+const Colors = {
+    WHITE: 'rgb(255, 255, 255)',
+    YELLOW: 'rgb(255, 255, 0)',
+    RED: 'rgb(255, 0, 0)',
+    BLUE: 'rgb(0, 0, 255)',
+    GREEN: 'rgb(0, 255, 0)',
+    BLACK: 'rgb(0, 0, 0)',
+    ORANGE: 'rgb(255, 128, 0)',
+    PURPLE: 'rgb(128, 0, 128)',
+    GRID: 'rgb(50, 50, 50)', // Color for the grid lines
+    // Function to get a random color for cells (excluding black/white)
+    getRandomColor: (): string => {
+        const availableColors = [Colors.YELLOW, Colors.RED, Colors.BLUE, Colors.GREEN, Colors.ORANGE, Colors.PURPLE];
+        return availableColors[Math.floor(Math.random() * availableColors.length)];
+    },
+    // Function to darken color for aging
+    fadeColor: (color: string): string => {
+        const match = color.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
+        if (match) {
+            const r = Math.max(0, Math.floor(parseInt(match[1]) * 0.975));
+            const g = Math.max(0, Math.floor(parseInt(match[2]) * 0.975));
+            const b = Math.max(0, Math.floor(parseInt(match[3]) * 0.975));
+            return `rgb(${r}, ${g}, ${b})`;
+        }
+        return color; // Return original if format is unexpected
+    }
+};
+
+// --- Interfaces and Types ---
+interface GridLocation {
+    row: number;
+    col: number;
+}
+
+type GridObject = Cell | Food | 0; // 0 represents empty space
+type Face = 0 | 1 | 2 | 3; // 0: Up, 1: Right, 2: Down, 3: Left
+
+// RL States
+const STATE_EMPTY = 0;
+const STATE_CELL = 1;
+const STATE_FOOD = 2;
+const STATE_WALL = 3;
+type RLState = typeof STATE_EMPTY | typeof STATE_CELL | typeof STATE_FOOD | typeof STATE_WALL;
+const RL_STATES = [STATE_EMPTY, STATE_CELL, STATE_FOOD, STATE_WALL];
+
+// RL Actions
+const ACTION_TURN = 0;
+const ACTION_GO = 1;
+type RLAction = typeof ACTION_TURN | typeof ACTION_GO;
+const RL_ACTIONS = [ACTION_TURN, ACTION_GO];
+
+// --- World Class (from core.py) ---
+class World {
+    readonly width: number;
+    readonly height: number;
+    spaces: GridObject[][];
+    matters: { 'Cell': Cell[], 'Food': Food[] };
+    matterCount: { 'Cell': number, 'Food': number };
+
+    constructor(size: number) {
+        this.width = size;
+        this.height = size;
+        // Initialize grid with empty spaces (0)
+        this.spaces = Array(this.height).fill(0).map(() => Array(this.width).fill(0));
+        this.matters = { 'Cell': [], 'Food': [] };
+        this.matterCount = { 'Cell': 0, 'Food': 0 };
+    }
+
+    getAvailableSpaces(): GridLocation[] {
+        const available: GridLocation[] = [];
+        for (let r = 0; r < this.height; r++) {
+            for (let c = 0; c < this.width; c++) {
+                if (this.spaces[r][c] === 0) {
+                    available.push({ row: r, col: c });
+                }
+            }
+        }
+        return available;
+    }
+
+    getRandomAvailableSpace(): GridLocation | null {
+        const available = this.getAvailableSpaces();
+        if (available.length === 0) {
+            return null;
+        }
+        const index = Math.floor(Math.random() * available.length);
+        return available[index];
+    }
+
+    addMatter(matter: Cell | Food): boolean {
+            const location: GridLocation | null = this.getRandomAvailableSpace();
+        if (location) {
+            matter.born(location); // Let matter handle its placement
+            return true;
+        }
+        return false; // No space
+    }
+
+    removeMatter(matter: Cell | Food) {
+        if (matter.currentLocation) {
+            const { row, col } = matter.currentLocation;
+            if (this.spaces[row]?.[col] === matter) {
+                this.spaces[row][col] = 0; // Clear space
+            }
+        }
+        const list = this.matters[matter.className];
+        const index = list.indexOf(matter as any); // Type assertion needed
+        if (index > -1) {
+            list.splice(index, 1);
+        }
+        // Note: matterCount is handled by Matter's born/die
+    }
+
+    getObjectAt(location: GridLocation): GridObject {
+        if (this.isValidLocation(location)) {
+            return this.spaces[location.row][location.col];
+        }
+        throw new Error("Accessing invalid location"); // Should be checked before calling
+    }
+
+    isValidLocation(location: GridLocation): boolean {
+        return location.row >= 0 && location.row < this.height &&
+               location.col >= 0 && location.col < this.width;
+    }
+}
+
+// --- Matter Base Class (from core.py) ---
+abstract class Matter {
+    world: World;
+    isAlive: boolean = false;
+    currentLocation: GridLocation | null = null;
+    color: string = Colors.BLACK;
+    age: number = 0; // Steps lived
+    bornStep: number = 0; // Simulation step when born
+    name: string = '';
+    readonly className: 'Cell' | 'Food'; // Required for subclasses
+
+    constructor(world: World, className: 'Cell' | 'Food') {
+        this.world = world;
+        this.className = className;
+        // Attempt to be born immediately - moved to world.addMatter
+    }
+
+    born(location: Location): void {
+        if (!this.isAlive) {
+            this.world.spaces[location.row][location.col] = this;
+            this.world.matters[this.className].push(this as any);
+            this.world.matterCount[this.className]++;
+
+            this.isAlive = true;
+            this.currentLocation = location;
+            this.bornStep = simulationStep; // Use global step counter
+            this.name = `${this.className}_${this.world.matterCount[this.className]}`;
+            this.color = Colors.getRandomColor(); // Assign initial random color
+        }
+    }
+
+    die(): void {
+        if (this.isAlive && this.currentLocation) {
+            const { row, col } = this.currentLocation;
+            // Check if we are still at the location before clearing
+            if (this.world.spaces[row]?.[col] === this) {
+                this.world.spaces[row][col] = 0;
+            }
+            const list = this.world.matters[this.className];
+            const index = list.indexOf(this as any);
+            if (index > -1) {
+                list.splice(index, 1);
+            }
+            // Decrementing count is tricky if names are reused, handled by removing from list
+            this.isAlive = false;
+            this.color = Colors.BLACK;
+            this.currentLocation = null;
+        }
+    }
+
+    aging(currentStep: number): void {
+        if (this.isAlive) {
+            this.age = currentStep - this.bornStep;
+             // Fade color every few steps (adjust frequency as needed)
+            if (this.age % 10 === 0 && this.age > 0) {
+                 this.color = Colors.fadeColor(this.color);
+            }
+        }
+    }
+}
+
+// --- Food Class (from core.py) ---
+class Food extends Matter {
+    readonly energy: number = FOOD_ENERGY;
+
+    constructor(world: World) {
+        super(world, 'Food');
+        this.color = Colors.YELLOW; // Food is always yellow
+    }
+
+    // Override born to set specific food color
+    born(location: Location): void {
+        super.born(location);
+        if (this.isAlive) {
+             this.color = Colors.YELLOW;
+        }
+    }
+
+    // Food doesn't age in the same way, override aging to do nothing
+    aging(currentStep: number): void { }
+}
+
+// --- Cell Class (from core.py, including RL) ---
+class Cell extends Matter {
+    face: Face;
+    energy: number = CELL_START_ENERGY;
+    readonly maxEnergy: number = CELL_MAX_ENERGY;
+
+    // RL Memory: state -> action -> value
+    memory: number[][];
+
+    constructor(world: World) {
+        super(world, 'Cell');
+        this.face = this.getRandomFace();
+
+        // Initialize RL memory
+        this.memory = Array(RL_STATES.length).fill(0).map(() => Array(RL_ACTIONS.length).fill(0));
+    }
+
+    born(location: Location): void {
+        super.born(location);
+        if (this.isAlive) {
+            this.face = this.getRandomFace();
+            this.energy = CELL_START_ENERGY;
+        }
+    }
+
+    getRandomFace(): Face {
+        return Math.floor(Math.random() * 4) as Face;
+    }
+
+    // RL Step: Sense, Decide, Act, Learn
+    stepRL(): void {
+        if (!this.isAlive) return;
+
+        // 1. Sense environment in front
+        const sensedLocation = this.senseFront();
+        const nextState = this.askWhatsNext(sensedLocation);
+
+        // 2. Decide action based on memory (Expect & Best Action)
+        const history = this.expect(nextState);
+        const action = this.bestAction(history, RL_EPSILON);
+
+        // 3. Perform action and get reward
+        const reward = this.doAction(action, nextState, sensedLocation);
+
+        // 4. Learn by updating memory
+        this.remember(nextState, action, reward);
+
+        // Basic needs
+        this.energy -= MOVE_ENERGY_COST; // Cost of thinking/existing per step
+        this.aging(simulationStep);
+
+        // Check for death conditions
+        if (this.energy <= 0 || this.age > CELL_MAX_AGE_STEPS) {
+            this.die();
+        }
+    }
+
+    // --- RL Helper Functions (translated from core.py) ---
+
+    senseFront(): Location { //
+        let dr = 0, dc = 0;
+        switch (this.face) {
+            case 0: dr = -1; break; // Up
+            case 1: dc = 1; break;  // Right
+            case 2: dr = 1; break;  // Down
+            case 3: dc = -1; break; // Left
+        }
+        // currentLocation should always exist if alive
+        return { row: this.currentLocation!.row + dr, col: this.currentLocation!.col + dc };
+    }
+
+    askWhatsNext(location: Location): RLState { //
+        if (!this.world.isValidLocation(location)) {
+            return STATE_WALL;
+        }
+        const obj = this.world.getObjectAt(location);
+        if (obj === 0) return STATE_EMPTY;
+        if (obj instanceof Cell) return STATE_CELL;
+        if (obj instanceof Food) return STATE_FOOD;
+        // Should not happen with current types
+        console.error("Unknown object type at", location, obj);
+        return STATE_WALL; // Treat unexpected as wall
+    }
+
+    expect(state: RLState): number[] { //
+        // Ensure state is a valid index
+        const stateIndex = RL_STATES.indexOf(state);
+         if (stateIndex < 0) {
+            console.error("Invalid state for expect:", state);
+            return Array(RL_ACTIONS.length).fill(0); // Return neutral if state is invalid
+        }
+        return this.memory[stateIndex];
+    }
+
+    bestAction(history: number[], epsilon: number): RLAction { //
+         // Epsilon-greedy exploration
+        if (Math.random() < epsilon || history.every(v => v === 0)) {
+            // Explore: Choose random action
+             return RL_ACTIONS[Math.floor(Math.random() * RL_ACTIONS.length)];
+        } else {
+            // Exploit: Choose action with highest value
+             let bestActionIndex = 0;
+             let maxValue = history[0];
+             for(let i = 1; i < history.length; i++) {
+                 if (history[i] > maxValue) {
+                     maxValue = history[i];
+                     bestActionIndex = i;
+                 }
+             }
+            return RL_ACTIONS[bestActionIndex];
+        }
+    }
+
+    doAction(actionIndex: RLAction, nextState: RLState, newLocation: Location): number { //
+        let reward = 0;
+        if (actionIndex === ACTION_TURN) {
+            this.turnFace();
+            reward = 0; // Small penalty/reward for turning? Currently neutral.
+        } else if (actionIndex === ACTION_GO) {
+            reward = this._go(nextState, newLocation);
+        } else {
+            console.error("Invalid action index:", actionIndex);
+        }
+        return reward;
+    }
+
+     remember(state: RLState, action: RLAction, reward: number): void { //
+        const stateIndex = RL_STATES.indexOf(state);
+         const actionIndex = RL_ACTIONS.indexOf(action);
+         if (stateIndex >= 0 && actionIndex >= 0) {
+             this.memory[stateIndex][actionIndex] += reward;
+         } else {
+              console.error("Invalid state or action for remember:", state, action);
+         }
+    }
+
+
+    _go(nextState: RLState, newLocation: Location): number { //
+        let reward = 0;
+        switch (nextState) {
+            case STATE_EMPTY:
+                this.move(newLocation);
+                reward = 1; // Reward for moving into empty space
+                break;
+            case STATE_FOOD:
+                const food = this.world.getObjectAt(newLocation);
+                if (food instanceof Food) {
+                    this.eat(food);
+                    this.move(newLocation); // Move to the food's location after eating
+                    reward = 10; // High reward for eating
+                } else {
+                    // Food disappeared? Treat as empty
+                    this.move(newLocation);
+                     reward = 1;
+                }
+                break;
+            case STATE_CELL:
+            case STATE_WALL:
+                this.turnFace(); // Bumped, just turn
+                reward = -1; // Penalty for bumping
+                break;
+        }
+        this.energy -= MOVE_ENERGY_COST; // Energy cost for attempting to move
+        return reward;
+    }
+
+
+    // --- Basic Cell Actions ---
+
+    move(newLocation: Location): void { //
+        if (!this.isAlive || !this.currentLocation) return;
+
+        // Clear old location
+        this.world.spaces[this.currentLocation.row][this.currentLocation.col] = 0;
+
+        // Set new location
+        this.currentLocation = newLocation;
+        this.world.spaces[this.currentLocation.row][this.currentLocation.col] = this;
+
+        // Energy cost handled in _go or stepRL
+    }
+
+    turnFace(): void { //
+        const currentFace = this.face;
+        let newFace: Face;
+        do {
+            newFace = this.getRandomFace();
+        } while (newFace === currentFace); // Ensure it's a different face
+        this.face = newFace;
+        // Optional small energy cost for turning?
+    }
+
+    eat(food: Food): void { //
+        if (food.isAlive) {
+            this.energy = Math.min(this.maxEnergy, this.energy + food.energy);
+            food.die(); // Food gets removed from the world
+        }
+    }
+}
+
+
+// --- Simulation Setup and Loop ---
+const canvas = document.getElementById('simulationCanvas') as HTMLCanvasElement;
+const ctx = canvas.getContext('2d')!;
 const cellCountSpan = document.getElementById('cellCount')!;
 const foodCountSpan = document.getElementById('foodCount')!;
-
-
-// --- World Configuration ---
-const GRID_SIZE = 30;       // Matches Python World(30)
-const CANVAS_SIZE = 500;    // Matches Pygame size
-const TILE_WIDTH = CANVAS_SIZE / GRID_SIZE;
-const TILE_HEIGHT = CANVAS_SIZE / GRID_SIZE;
-const MAX_CELLS = 30;       // Target number of cells
-const MAX_FOOD = 30;        // Target number of food items
-const CELL_MAX_AGE = 15;    // Increased max age slightly
-const CELL_AGE_INTERVAL_MS = 3000; // How often age increases (e.g., 3 seconds)
-
-// class World {
-//     constructor() {
-
-//     }
-// }
 
 canvas.width = CANVAS_SIZE;
 canvas.height = CANVAS_SIZE;
 
-// --- Colors (using CSS color strings & RGB objects for manipulation) ---
-const CELL_COLOR_STRINGS = [
-    'rgb(255, 0, 0)',   // RED
-    'rgb(0, 0, 255)',   // BLUE
-    'rgb(0, 255, 0)',   // GREEN
-    'rgb(255, 128, 0)', // ORANGE
-    'rgb(128, 0, 128)'  // PURPLE
-];
-const FOOD_COLOR_STRING = 'rgb(255, 255, 0)'; // YELLOW
-const BLACK = 'rgb(0, 0, 0)';
-const WHITE = 'rgb(255, 255, 255)';
+const world = new World(GRID_SIZE);
+let simulationStep = 0;
+let simulationIntervalId: number | null = null;
 
-// --- World State ---
-// Grid stores Cell, Food, or null (empty)
-let worldSpaces: (Cell | Food | null)[][] = Array(GRID_SIZE).fill(null).map(() => Array(GRID_SIZE).fill(null));
-let livingCells: Cell[] = [];
-let livingFoods: Food[] = [];
-let lifesEver: number = 0;
-let foodsEver: number = 0;
 
-// --- Utility Functions ---
-function getRandomInt(max: number): number {
-    return Math.floor(Math.random() * max);
-}
-
-function getRandomElement<T>(arr: T[]): T | null {
-    if (!arr || arr.length === 0) return null;
-    return arr[getRandomInt(arr.length)];
-}
-
-function parseRGB(rgbString: string): RgbColor | null {
-    const result = /^rgb\((\d+),\s*(\d+),\s*(\d+)\)$/.exec(rgbString);
-    return result ? { r: parseInt(result[1]), g: parseInt(result[2]), b: parseInt(result[3]) } : null;
-}
-
-function formatRGB(rgbObject: RgbColor): string {
-    // Clamp values between 0 and 255 and round
-    const r = Math.max(0, Math.min(255, Math.round(rgbObject.r)));
-    const g = Math.max(0, Math.min(255, Math.round(rgbObject.g)));
-    const b = Math.max(0, Math.min(255, Math.round(rgbObject.b)));
-    return `rgb(${r}, ${g}, ${b})`;
-}
-
-function getAvailableSpaces(): Point[] {
-    const available: Point[] = [];
-    for (let y = 0; y < GRID_SIZE; y++) {
-        for (let x = 0; x < GRID_SIZE; x++) {
-            if (worldSpaces[y][x] === null) {
-                available.push({ y, x }); // Use y, x order consistent with grid access
-            }
-        }
-    }
-    return available;
-}
-
-// --- Base Entity Class (Optional, for common properties) ---
-class Entity {
-    x: number | null = null;
-    y: number | null = null;
-    alive: boolean = false;
-    color: string = BLACK;
-    name: string = "Entity";
-
-    render() {
-        if (!this.alive || this.x === null || this.y === null) return;
-        ctx.fillStyle = this.color;
-        ctx.fillRect(this.x * TILE_WIDTH, this.y * TILE_HEIGHT, TILE_WIDTH, TILE_HEIGHT);
+// --- Rendering Functions (adapted from main.py) ---
+function renderGrid() {
+    ctx.strokeStyle = Colors.GRID;
+    ctx.lineWidth = 0.5;
+    for (let i = 0; i <= GRID_SIZE; i++) {
+        // Vertical lines
+        ctx.beginPath();
+        ctx.moveTo(i * TILE_SIZE, 0);
+        ctx.lineTo(i * TILE_SIZE, CANVAS_SIZE);
+        ctx.stroke();
+        // Horizontal lines
+        ctx.beginPath();
+        ctx.moveTo(0, i * TILE_SIZE);
+        ctx.lineTo(CANVAS_SIZE, i * TILE_SIZE);
+        ctx.stroke();
     }
 }
 
-// --- Food Class ---
-class Food extends Entity {
-    constructor() {
-        super(); // Call Entity constructor
-        this.color = FOOD_COLOR_STRING;
+function renderMatter(matter: Matter) {
+    if (!matter.isAlive || !matter.currentLocation) return;
 
-        const available = getAvailableSpaces();
-        const space = getRandomElement(available);
+    const { row, col } = matter.currentLocation;
+    const x = col * TILE_SIZE;
+    const y = row * TILE_SIZE;
 
-        if (space) {
-            this.born(space.x, space.y);
-        } else {
-            console.warn("No available space for new Food");
-            // Don't add if creation failed
-        }
-    }
+    ctx.fillStyle = matter.color;
+    ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
 
-    born(x: number, y: number): void {
-        foodsEver++;
-        this.name = `Food_${foodsEver}`;
-        this.x = x;
-        this.y = y;
-        this.alive = true;
-        worldSpaces[y][x] = this; // Place self in the world grid (y, x)
-        livingFoods.push(this);
-    }
-
-    die(): void {
-        if (!this.alive || this.x === null || this.y === null) return;
-
-        // Remove from grid only if this food item is actually there
-        if (worldSpaces[this.y][this.x] === this) {
-            worldSpaces[this.y][this.x] = null;
-        }
-
-        this.alive = false;
-        this.x = null;
-        this.y = null;
-
-        // Remove from the livingFoods list
-        const index = livingFoods.indexOf(this);
-        if (index > -1) {
-            livingFoods.splice(index, 1);
-        }
-        // console.log(`${this.name} was eaten/removed.`);
+    // Optional: Render face direction for Cells
+    if (matter instanceof Cell) {
+         renderCellFace(matter, x, y);
     }
 }
 
+function renderCellFace(cell: Cell, x: number, y: number) {
+    ctx.fillStyle = Colors.WHITE; // Contrasting color for the indicator
+    const centerX = x + TILE_SIZE / 2;
+    const centerY = y + TILE_SIZE / 2;
+    const indicatorSize = TILE_SIZE / 4;
 
-// --- Cell Class ---
-class Cell extends Entity {
-    age: number = 0;
-    bornTime: number = performance.now();
-    lastAgeUpdate: number = this.bornTime;
-    // 0: up (-y), 1: right (+x), 2: down (+y), 3: left (-x)
-    face: number = getRandomInt(4);
-
-    constructor() {
-        super();
-        this.color = getRandomElement(CELL_COLOR_STRINGS) || RED; // Default to RED if random fails
-
-        const available = getAvailableSpaces();
-        const space = getRandomElement(available);
-
-        if (space) {
-            this.born(space.x, space.y);
-        } else {
-            console.warn("No available space for new Cell");
-        }
+    ctx.beginPath();
+    switch (cell.face) {
+        case 0: // Up
+            ctx.moveTo(centerX, y + indicatorSize / 2);
+            ctx.lineTo(centerX - indicatorSize / 2, y + indicatorSize * 1.5);
+            ctx.lineTo(centerX + indicatorSize / 2, y + indicatorSize * 1.5);
+            break;
+         case 1: // Right
+            ctx.moveTo(x + TILE_SIZE - indicatorSize / 2, centerY);
+            ctx.lineTo(x + TILE_SIZE - indicatorSize * 1.5, centerY - indicatorSize / 2);
+            ctx.lineTo(x + TILE_SIZE - indicatorSize * 1.5, centerY + indicatorSize / 2);
+            break;
+         case 2: // Down
+            ctx.moveTo(centerX, y + TILE_SIZE - indicatorSize / 2);
+            ctx.lineTo(centerX - indicatorSize / 2, y + TILE_SIZE - indicatorSize * 1.5);
+            ctx.lineTo(centerX + indicatorSize / 2, y + TILE_SIZE - indicatorSize * 1.5);
+            break;
+        case 3: // Left
+             ctx.moveTo(x + indicatorSize / 2, centerY);
+            ctx.lineTo(x + indicatorSize * 1.5, centerY - indicatorSize / 2);
+            ctx.lineTo(x + indicatorSize * 1.5, centerY + indicatorSize / 2);
+            break;
     }
-
-    born(x: number, y: number): void {
-        lifesEver++;
-        this.name = `Cell_${lifesEver}`;
-        this.x = x;
-        this.y = y;
-        this.alive = true;
-        this.bornTime = performance.now();
-        this.lastAgeUpdate = this.bornTime;
-        this.face = getRandomInt(4);
-        worldSpaces[y][x] = this; // Place self in the world grid (y, x)
-        livingCells.push(this);
-    }
-
-    die(): void {
-        if (!this.alive || this.x === null || this.y === null) return;
-
-        // console.log(`${this.name} dying at age ${this.age}`);
-        if (worldSpaces[this.y][this.x] === this) {
-            worldSpaces[this.y][this.x] = null;
-        }
-        this.alive = false;
-        this.x = null;
-        this.y = null;
-
-        const index = livingCells.indexOf(this);
-        if (index > -1) {
-            livingCells.splice(index, 1);
-        }
-    }
-
-    aging(): void {
-        if (!this.alive) return;
-
-        const now = performance.now();
-        if (now - this.lastAgeUpdate >= CELL_AGE_INTERVAL_MS) {
-            this.age++;
-            this.lastAgeUpdate = now;
-
-            // Fade color
-            const rgb = parseRGB(this.color);
-            if (rgb) {
-                rgb.r *= 0.9;
-                rgb.g *= 0.9;
-                rgb.b *= 0.9;
-                this.color = formatRGB(rgb);
-            }
-
-            // Check for death by old age
-            if (this.age > CELL_MAX_AGE) {
-                this.die();
-            }
-        }
-    }
-
-    searchToMove(): Point {
-        let nextX = this.x!; // Use non-null assertion as cell must be alive to move
-        let nextY = this.y!;
-
-        if (this.face === 0) nextY--;      // Up
-        else if (this.face === 1) nextX++; // Right
-        else if (this.face === 2) nextY++; // Down
-        else if (this.face === 3) nextX--; // Left
-
-        return { x: nextX, y: nextY };
-    }
-
-    askNextMove(): void {
-        if (!this.alive || this.x === null || this.y === null) return;
-
-        const { x: nextX, y: nextY } = this.searchToMove();
-
-        // 1. Check boundaries
-        if (nextX < 0 || nextX >= GRID_SIZE || nextY < 0 || nextY >= GRID_SIZE) {
-            this.turnFace();
-            return;
-        }
-
-        // 2. Check target space content
-        const targetContent = worldSpaces[nextY][nextX];
-
-        if (targetContent === null) { // Empty space -> Move
-            this.move(nextX, nextY);
-        } else if (targetContent instanceof Food) { // Food -> Eat
-            this.eat(targetContent);
-            // Note: The cell does NOT move onto the food square in the same turn it eats.
-            // It consumes the food, the space becomes null, maybe it moves next turn.
-            // If you want it to move *immediately* after eating, call this.move(nextX, nextY) here.
-        } else { // Blocked by another cell (or unknown object) -> Turn
-            this.turnFace();
-        }
-    }
-
-    move(newX: number, newY: number): void {
-        if (!this.alive || this.x === null || this.y === null) return;
-
-        // Clear old position ONLY if it currently holds this cell
-        if (worldSpaces[this.y][this.x] === this) {
-            worldSpaces[this.y][this.x] = null;
-        }
-
-        // Update coordinates
-        this.x = newX;
-        this.y = newY;
-
-        // Place in new position
-        worldSpaces[newY][newX] = this;
-    }
-
-    turnFace(): void {
-        if (!this.alive) return;
-        let newFace = this.face;
-        // Ensure the new face is different
-        while (newFace === this.face) {
-            newFace = getRandomInt(4);
-        }
-        this.face = newFace;
-    }
-
-    eat(food: Food): void {
-        if (!this.alive) return;
-        // console.log(`${this.name} eats ${food.name}`);
-        food.die(); // Food removes itself from grid and list
-        // Optional: Cell gains benefits (e.g., reset age, gain energy)
-        // this.age = Math.max(0, this.age - 5); // Example: get younger
-        // this.lastAgeUpdate = performance.now(); // Reset age timer
-    }
-
-    // Override render to potentially add cell-specific details later
-    render() {
-        super.render(); // Call base class render (draws the rectangle)
-
-        // Optional: Render debug info like face direction
-        // if (this.alive && this.x !== null && this.y !== null) {
-        //     ctx.fillStyle = WHITE;
-        //     ctx.font = "8px Arial";
-        //     ctx.textAlign = "center";
-        //     ctx.textBaseline = "middle";
-        //     const centerX = (this.x + 0.5) * TILE_WIDTH;
-        //     const centerY = (this.y + 0.5) * TILE_HEIGHT;
-        //     let arrow = '?';
-        //     if (this.face === 0) arrow = '^';
-        //     else if (this.face === 1) arrow = '>';
-        //     else if (this.face === 2) arrow = 'v';
-        //     else if (this.face === 3) arrow = '<';
-        //     ctx.fillText(arrow, centerX, centerY);
-        // }
-    }
+     ctx.closePath();
+     ctx.fill();
 }
 
 
-// --- Game Loop & Simulation Logic ---
-let lastTime = 0;
-let simulationTimeAccumulator = 0;
-const simulationUpdateInterval = 100; // Update simulation logic every 100ms (10 times per second)
-
-function gameLoop(timestamp: number) {
-    const deltaTime = timestamp - lastTime;
-    lastTime = timestamp;
-    simulationTimeAccumulator += deltaTime;
-
-    // --- Update Simulation Logic (Throttled) ---
-    while (simulationTimeAccumulator >= simulationUpdateInterval) {
-        simulationTimeAccumulator -= simulationUpdateInterval;
-
-        // Spawn new entities if below max count
-        while (livingCells.length < MAX_CELLS && getAvailableSpaces().length > 0) {
-            new Cell();
-        }
-        while (livingFoods.length < MAX_FOOD && getAvailableSpaces().length > 0) {
-            new Food();
-        }
-
-        // Update living cells (use slice to iterate over a copy)
-        livingCells.slice().forEach(cell => {
-            if (cell.alive) { // Check if it didn't die during this update cycle
-                cell.aging();
-                 // Check alive status again after aging (might die of old age)
-                if (cell.alive) {
-                    cell.askNextMove();
-                }
-            }
-        });
-
-        // Update Food (if food had any active logic like rotting)
-        // livingFoods.slice().forEach(food => { /* ... */ });
-
-        // Update Info Display
-        cellCountSpan.textContent = livingCells.length.toString();
-        foodCountSpan.textContent = livingFoods.length.toString();
-    }
-
-    // --- Rendering (Every Frame) ---
+function render() {
     // Clear canvas
-    ctx.fillStyle = BLACK;
+    ctx.fillStyle = Colors.BLACK;
     ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
 
-    // Render Food first (so cells draw over them if overlapping temporarily)
-    livingFoods.forEach(food => food.render());
+    // Draw grid
+    renderGrid();
 
-    // Render Cells
-    livingCells.forEach(cell => cell.render());
+    // Draw all matters (cells and food)
+    world.matters.Food.forEach(renderMatter);
+    world.matters.Cell.forEach(renderMatter);
 
+
+    // Update info display
+    cellCountSpan.textContent = world.matters.Cell.length.toString();
+    foodCountSpan.textContent = world.matters.Food.length.toString();
 
     // Request next frame
-    requestAnimationFrame(gameLoop);
+    requestAnimationFrame(render);
 }
 
-// --- Start the simulation ---
-console.log("Starting simulation...");
-requestAnimationFrame(gameLoop); // Start the loop
+// --- Simulation Logic Update ---
+function updateSimulation() {
+    simulationStep++;
+
+    // Update cells (RL step, aging, death check)
+    // Iterate backwards for safe removal during iteration
+    for (let i = world.matters.Cell.length - 1; i >= 0; i--) {
+        world.matters.Cell[i].stepRL(); // Includes aging and death checks
+    }
+
+     // Replenish food and cells if below limits
+    while (world.matters.Food.length < INITIAL_FOOD) {
+         const newFood = new Food(world);
+         if (!world.addMatter(newFood)) break; // Stop if no space
+    }
+
+    // Spawn new cells more gradually than in the python main loop
+     if (world.matters.Cell.length < MAX_CELLS && Math.random() < 0.1) { // Chance to spawn
+          const newCell = new Cell(world);
+          world.addMatter(newCell); // Ignore if no space
+     }
+
+}
+
+
+// --- Start Simulation ---
+function startSimulation() {
+    if (simulationIntervalId === null) {
+        // Initial population
+        for (let i = 0; i < INITIAL_CELLS; i++) {
+            const cell = new Cell(world);
+            world.addMatter(cell); // Add to world, which finds space
+        }
+        for (let i = 0; i < INITIAL_FOOD; i++) {
+            const food = new Food(world);
+             world.addMatter(food);
+        }
+
+        simulationIntervalId = window.setInterval(updateSimulation, SIMULATION_SPEED_MS);
+        requestAnimationFrame(render); // Start rendering loop
+        console.log("Simulation started");
+    }
+}
+
+// --- Initialization ---
+startSimulation(); // Start automatically

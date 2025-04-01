@@ -10,7 +10,7 @@ from params import Color, _color
 """
 
 # pygame setup
-size = 800
+size = 300
 DISPLAY_WIDTH = size
 DISPLAY_HEIGHT = size 
 
@@ -89,7 +89,7 @@ def render_face(cell: Cell, x_position, y_position):
 
 
 
-world = World(50) # size
+world = World(300) # size
 
 
 
@@ -116,8 +116,8 @@ while running:
         # while len(world.matter["Cell"]) < 3:
         #     c = Cell(world)
 
-        while len(world.matter["Food"]) < 30:
-            f = Food(world)
+        # while len(world.matter["Food"]) < 30:
+        #     f = Food(world)
 
 
     
