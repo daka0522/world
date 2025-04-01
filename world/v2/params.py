@@ -12,5 +12,5 @@ class Color:
     ORANGE: _color = np.array([255, 128, 0])
     PURPLE: _color = np.array([128,0,128])
 
-    COLORS: list[_color] = [RED, BLUE, GREEN, ORANGE, PURPLE]
+    COLORS: list[_color] = [WHITE, YELLOW, RED, BLUE, GREEN, ORANGE, PURPLE]
 

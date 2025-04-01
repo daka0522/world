@@ -1,7 +1,7 @@
 import numpy as np 
 import pygame 
 # from core import World, Cell, Food
-from type_test import World, Cell, Food
+from core import World, Cell, Food
 from params import Color, _color
 
 """ 
@@ -89,7 +89,7 @@ def render_face(cell: Cell, x_position, y_position):
 
 
 
-world = World(75) # size
+world = World(50) # size
 
 
 
@@ -113,11 +113,11 @@ while running:
     else: 
         c = Cell(world)
 
-        # while len(world.matter["Cell"]) < 50:
+        # while len(world.matter["Cell"]) < 3:
         #     c = Cell(world)
 
-        # while len(world.matter["Food"]) < 10:
-        #     f = Food(world)
+        while len(world.matter["Food"]) < 30:
+            f = Food(world)
 
 
     
@@ -127,10 +127,15 @@ while running:
             
             cell.ask_next_move()
             
-            # cell.aging()
+            # RL function
+            new_location = cell.sense_front()
+            next_state = cell.ask_whats_next(new_location) 
+            history = cell.expect(next_state)
+            action = cell.best_action(history)
+            reward = cell.do_action(action, next_state, new_location) 
+            cell.remember(next_state, action, reward)
 
-            # if cell.energy <= 0 or cell.age > 100:
-            #     cell.die()
+            # print(f"Cell: {cell.name}, Memory: {cell.memory}")
 
     for food in world.matter["Food"]:
         if type(food) is Food:
@@ -138,8 +143,8 @@ while running:
 
 
     # print(f"face: {c1.face}, location: {c1.current_location} \n")
-    print(f"world.spaces: \n {world.spaces} \n \n")
+    # print(f"world.spaces: \n {world.spaces} \n \n")
 
     pygame.display.flip()
-    clock.tick(60)
+    clock.tick(30)
 pygame.quit()

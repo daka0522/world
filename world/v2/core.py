@@ -2,7 +2,7 @@ import numpy as np
 import time 
 from collections import defaultdict
 from params import Color, _color
-
+from typing import Any
 """ 
 =====================================================================================
 Logic 
@@ -18,6 +18,8 @@ type _face = int | None | np.ndarray
 
 
 class World: 
+
+    type _state = int | str 
     """
     World is where all the object lives and dies.
     It gives spaces and some other informations.
@@ -27,12 +29,13 @@ class World:
         self.HEIGHT = size 
         self.WIDTH = size
 
-        self.spaces: np.ndarray = np.zeros((self.HEIGHT, self.WIDTH), dtype=object)
+        self.spaces: np.ndarray[tuple[int, int], np.dtype[Any]] = np.zeros((self.HEIGHT, self.WIDTH), dtype=object)
 
         self.matter: dict[str, list[Matter | Cell | Food]] = defaultdict(list)
         self.matter_count: dict[str, int] = defaultdict(int)
 
-        self.reward_map: dict = {"Cell": -1, 0: 1, "Food": 10, -1: -1}
+        self.states = ["Cell", 0, "Food", -1]
+        self.state_reward_map: dict = {"Cell": -1, 0: 1, "Food": 10, -1: -1}
 
 
     def get_avialable_spaces(self) -> np.ndarray[_location, np.dtype[np.int_]]:
@@ -84,10 +87,10 @@ class Matter:
             self.color = Color.COLORS[np.random.choice(len(Color.COLORS))] 
     
     def die(self) -> None: 
-        if self.is_alive: 
-            # row, col = self.current_location
-            if self.world.spaces[self.current_location] == self:
-                self.world.spaces[self.current_location] = 0
+        if self.is_alive and self.current_location is not None: 
+            row, col = self.current_location
+            if self.world.spaces[row, col] == self:
+                self.world.spaces[row, col] = 0
             
             self.is_alive = False
             self.color = Color.BLACK 
@@ -132,12 +135,13 @@ class Cell(Matter):
 
         super().__init__(world)
 
-        # Memory
-        self.memory = np.array([])
-
+        # States: {0: Empty, 1: Other Cell, 2: Food, 3: Wall(out boundary)}
+        self.states = [0, 1, 2, 3]
         # Actions: {1. turn face, 2. move}
-        # Next_states: Next space to move {Empty, Other Cell, Wall(Boundary), Food}
-        # Memory.save([next_state, action, reward])
+        self.actions = ["turn_face", "go"]
+        
+        # Memory
+        self.memory = np.zeros((len(self.states), len(self.actions)), dtype=int)
 
     def born(self, available_space) -> None:
         super().born(available_space)
@@ -190,14 +194,78 @@ class Cell(Matter):
                 self.turn_face()
 
     # RL Function 1
-    def ask_whats_next(self, new_location):
-        return self.world.spaces[new_location] 
+    def ask_whats_next(self, new_location: _location) -> World._state | np.ndarray | None:
+        if new_location is not None:
+            inside_world = 0 <= new_location[0] < self.world.HEIGHT and 0 <= new_location[1] < self.world.WIDTH
+            if inside_world:
+                obj =  self.world.spaces[new_location[0], new_location[1]] 
+                if obj == 0:
+                    return self.states[0]
+                elif type(obj) == Cell:
+                    return self.states[1]
+                elif type(obj) == Food:
+                    return self.states[2]
+            else:
+                return self.states[3] # outside world means wall(block) = 3
+        else: 
+            return None
 
     # RL Function 2
     def expect(self, next_state):
-        history_of_state = self.memory[next_state] 
+        history_of_state = self.memory[next_state]
+        return history_of_state
 
-    # RL Excute
+    # RL Function 3
+    def best_action(self, history_of_state: np.ndarray[tuple[int, int], np.dtype], epsilon=0.1):
+        # if there's no memory at all, so sum of memory == 0:
+        if np.sum(history_of_state) == 0:
+            # return np.random.choice(len(self.actions))
+            return 1 # go
+        else:
+            if np.random.randn() < epsilon:
+                return np.random.choice(len(self.actions))
+            else:
+                return np.argmax(history_of_state)
+    
+    # RL Function 4
+    def do_action(self, action, next_state, new_location):
+        action = self.actions[action]
+        if action == "turn_face":
+            self.turn_face()
+            reward =  0
+        elif action == "go":
+            reward = self._go(next_state, new_location) 
+        else:
+            raise Exception("Invalid action")
+        return reward
+    
+    # RL Function 5
+    def remember(self, next_state, action, reward):
+        self.memory[next_state][action] += reward
+         
+    # RL Function - private
+    def _go(self, next_state, new_location):
+        if next_state == 0: # empty
+            self.move(new_location)
+            result =  1
+        elif next_state == 1:
+            self.turn_face()
+            result = -1 
+        elif next_state == 2:
+            what = self.world.spaces[new_location[0], new_location[1]]
+            if isinstance(what, Food):
+                self.eat(what)
+            result = 1
+        # If new_location is out of world, then give negative reward, and not change the location:
+        elif next_state == 3:
+            self.turn_face()
+            result = -1
+        else:
+            raise Exception("Unknown next state")
+        return result
+        
+
+   
     def do_rl(self):
         new_location = self.sense_front()
         next_state = self.ask_whats_next(new_location)
@@ -227,7 +295,7 @@ class Cell(Matter):
         self.face = np.random.choice(new_face)
 
     def eat(self, food: Food) -> None:
-        self.energy += food.energy
+        # self.energy += food.energy
         food.die()
 
     # Aging system
