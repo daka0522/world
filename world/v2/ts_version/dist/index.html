@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cell Simulation</title>
+    <style>
+        body { margin: 0; overflow: hidden; display: flex; align-items: center; min-height: 100vh; flex-direction: column; }
+        canvas { border: 1px solid grey; width: 80vmin; height: 80vmin;}
+        input {width: 5rem;}
+        .controls {
+            display:flex;
+            margin: 1.5rem;
+            flex-wrap: wrap;
+            justify-content: center;
+
+            div {
+                margin: 0.5rem;
+            }
+        }
+    </style>
+<script defer src="bundle.js"></script></head>
+<body>
+    <h1>Cell Simulation</h1>
+    <p>Sorce code: <a href="https://github.com/daka0522/cell_simulation">Github</a></p>
+    <p>Created by Ryu Sung Chul, 2025</p>
+    <p>Motivation: A exploration of relationship between world(environment) and objects(matters, livings, agents..). </p>
+    <p>How to play: World size: how big of the space. higher is much more spaces. Cells: a basic matter. just moving around the space. it will be updated with acuiring some intelligence.</p>
+    
+    <div id="info">
+        <p>Inteilligence level: 1 (Basic)</p>
+    </div>
+
+    <div class="controls">
+        <div>
+            <label for="worldSizeCount">Wolrd Size: </label>
+            <input type="number" id="worldSizeCount" value="10" min="0">
+        </div>
+        <div>
+            <label for="cellCount">Cells:</label>
+            <input type="number" id="cellCount" value="10" min="0">
+        </div>
+        <div>
+            <label for="foodCount">Food:</label>
+            <input type="number" id="foodCount" value="0" min="0" >
+        </div>
+        <div>
+            <button onclick="startGame()">Start Simulation</button>
+            <button onclick="stopGame()">Stop Simulation</button>
+        </div>
+    </div>
+
+    <canvas id="worldCanvas" width="1080" height="1080"></canvas>
+</body>
+</html>
