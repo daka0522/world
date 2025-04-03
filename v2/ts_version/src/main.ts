@@ -21,6 +21,7 @@ const cellInput = document.getElementById("cellCount") as HTMLInputElement;
 const foodInput = document.getElementById("foodCount") as HTMLInputElement;
 
 let ctx: CanvasRenderingContext2D = canvas.getContext("2d")
+let ctx2: CanvasRenderingContext2D = canvas.getContext("2d")
 let animationFrameId: number | null = null; // To stop the loop
 
 let running = false; // Control the animation loop
@@ -139,6 +140,7 @@ function populateWorld() {
 
 function renderWrold(renderGrid: boolean = false) {
     // 1. Clear Canvas
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
     ctx.fillStyle = `rgb(${Color.BLACK.join(',')})`
     ctx.fillRect(0, 0, canvas.width, canvas.height)
     
@@ -158,8 +160,7 @@ function gameLoop() {
     };
 
     // 1. Clear Canvas
-    ctx.fillStyle = `rgb(${Color.BLACK.join(',')})`;
-    ctx.fillRect(0, 0, canvas.width, canvas.height)
+    renderWrold()
 
     // 2. Update game state
     // Iterate through a *copy* of the matter lists if elements might be removed during iteration
@@ -191,7 +192,7 @@ function gameLoop() {
 
 
 // --- Start/Stop Controls --- (Called from HTML)
-setupVisualization(); // Ensure canvas is ready
+// setupVisualization(); // DPR change cause some errors that outside of canvas
 
 function startGame() {
     if (running) return; // Prevent multiple starts
