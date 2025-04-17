@@ -14,3 +14,12 @@ class Color:
 
     COLORS: list[_color] = [WHITE, YELLOW, RED, BLUE, GREEN, ORANGE, PURPLE]
 
+def getRandomColor() -> _color:
+    color = np.array([np.random.randint(0, 255), np.random.randint(0, 255), np.random.randint(0, 255)])
+    return color
+
+def color_add(c1: _color, c2: _color) -> _color:
+    r = (c1[0] + c2[0]) / 2
+    g = (c1[1]+ c2[1]) / 2
+    b = (c1[2] + c2[2]) / 2
+    return np.array([r, g, b])

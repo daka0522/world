@@ -1,7 +1,7 @@
 import numpy as np 
 import pygame 
 # from core import World, Cell, Food
-from core import World, Cell, Food
+from core2_entropy import World, Cell, Food
 from params import Color, _color
 
 """ 
@@ -10,7 +10,7 @@ from params import Color, _color
 """
 
 # pygame setup
-size = 300
+size = 800
 DISPLAY_WIDTH = size
 DISPLAY_HEIGHT = size 
 
@@ -41,6 +41,14 @@ def render_matter(matter: Cell | Food, world: World, color: _color = Color.RED, 
     world: World
     color: (int, int, int)
         RGB value 0~255
+
+    rect((x,y), widht, height)
+    (x,y)--------
+    |           |
+    |           | height
+    |           |
+    -------------
+    width
     """
 
     width = DISPLAY_WIDTH / world.WIDTH
@@ -58,7 +66,51 @@ def render_matter(matter: Cell | Food, world: World, color: _color = Color.RED, 
             if type(matter) is Cell and rendering_face:
                 render_face(matter, x_position, y_position)
 
+def render_entropy(world: World) -> None:
+    """Render entropy-related visualizations."""
+    width = DISPLAY_WIDTH / world.WIDTH
+    height = DISPLAY_HEIGHT / world.HEIGHT
 
+    # Normalize temperature and energy fields for visualization
+    temp_max = np.max(world.temperature)
+    energy_max = np.max(world.energy_field)
+    
+    if temp_max > 0:
+        temp_normalized = world.temperature / temp_max
+    else:
+        temp_normalized = world.temperature
+        
+    if energy_max > 0:
+        energy_normalized = world.energy_field / energy_max
+    else:
+        energy_normalized = world.energy_field
+
+    # Create surfaces for temperature and energy visualization
+    temp_surface = pygame.Surface((DISPLAY_WIDTH, DISPLAY_HEIGHT), pygame.SRCALPHA)
+    energy_surface = pygame.Surface((DISPLAY_WIDTH, DISPLAY_HEIGHT), pygame.SRCALPHA)
+
+    # Render temperature field (red)
+    for i in range(world.HEIGHT):
+        for j in range(world.WIDTH):
+            alpha = int(temp_normalized[i,j] * 128)  # Max alpha of 128 for temperature
+            pygame.draw.rect(temp_surface, (255, 0, 0, alpha), 
+                           (j*width, i*height, width, height))
+
+    # Render energy field (blue)
+    for i in range(world.HEIGHT):
+        for j in range(world.WIDTH):
+            alpha = int(energy_normalized[i,j] * 128)  # Max alpha of 128 for energy
+            pygame.draw.rect(energy_surface, (0, 0, 255, alpha), 
+                           (j*width, i*height, width, height))
+
+    # Blit the surfaces onto the screen
+    screen.blit(temp_surface, (0, 0))
+    screen.blit(energy_surface, (0, 0))
+
+    # Display entropy value
+    font = pygame.font.SysFont("Arial", 16)
+    entropy_text = font.render(f"Entropy: {world.entropy:.2f}", True, tuple(Color.WHITE))
+    screen.blit(entropy_text, (10, 10))
 
 def render_face(cell: Cell, x_position, y_position):
     # render face
@@ -89,7 +141,7 @@ def render_face(cell: Cell, x_position, y_position):
 
 
 
-world = World(300) # size
+world = World(100) # size
 
 
 
@@ -123,28 +175,36 @@ while running:
     
     for cell in world.matter["Cell"]:
         if type(cell) is Cell:
+            cell.update_entropy()
             render_matter(cell, world, cell.color, rendering_face=False)
             
-            cell.ask_next_move()
+            # cell.ask_next_move()
             
             # RL function
             new_location = cell.sense_front()
             next_state = cell.ask_whats_next(new_location) 
             history = cell.expect(next_state)
             action = cell.best_action(history)
-            reward = cell.do_action(action, next_state, new_location) 
+            reward = cell.do_action(action, next_state, new_location, enable_color_add=False) 
             cell.remember(next_state, action, reward)
 
             # print(f"Cell: {cell.name}, Memory: {cell.memory}")
 
     for food in world.matter["Food"]:
         if type(food) is Food:
+            food.update_entropy()
             render_matter(food, world, Color.YELLOW)
 
 
     # print(f"face: {c1.face}, location: {c1.current_location} \n")
     # print(f"world.spaces: \n {world.spaces} \n \n")
 
+    # Update physics and entropy
+    world.update_physics()
+
+    # Render entropy visualization
+    render_entropy(world)
+
     pygame.display.flip()
-    clock.tick(30)
+    clock.tick(120)
 pygame.quit()
