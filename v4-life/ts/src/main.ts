@@ -3,12 +3,9 @@
 const canvas = document.getElementById("canvas") as HTMLCanvasElement
 const ctx = canvas.getContext("2d")
 
-canvas.width = 500
-canvas.height = 500
+canvas.width = 700
+canvas.height = 700
 
-const tile = 10
-let tileWidth = canvas.width / tile
-let tileHeight = canvas.height / tile
 
 type COLOR  = [number, number, number]
 
@@ -18,7 +15,10 @@ class Color {
     static GREEN: COLOR = [0, 255, 0]
 }
 
-function drawGrid(color: number[]): void {
+function drawGrid(color: number[], tile=10): void {
+    let tileWidth = canvas.width / tile
+    let tileHeight = canvas.height / tile
+
     if (!ctx) return
 
     ctx.strokeStyle = `rgb(${color.join(',')})`; // White lines
@@ -37,6 +37,7 @@ function drawGrid(color: number[]): void {
         ctx.stroke();
     }
 }
+
 // Animation parameters
 const duration = 10000; // Duration of one full cycle (white -> green -> white) in milliseconds
 let startTime: number | null = null;
@@ -70,6 +71,7 @@ function generateColorTransition(color1: COLOR, color2: COLOR, steps: number): C
     ] as COLOR); 
 }
 
+
 const steps = 500
 const transitionToGreen = generateColorTransition(Color.WHITE, Color.GREEN, steps)
 const green2black = generateColorTransition(Color.GREEN, Color.BLACK, steps)
@@ -91,21 +93,6 @@ function drawCircle(circle: Circle) {
     ctx.arc(circle.x, circle.y, circle.radius, 0, Math.PI * 2);
     ctx.fillStyle = `rgb(${circle.color.join(',')})`;
     ctx.fill();
-}
-
-// Draw the circle
-let c1: Circle = {
-    x: 100,
-    y: 100,
-    radius: 100,
-    color: Color.BLACK
-}
-
-let c2: Circle = {
-    x: 300, 
-    y: 300,
-    radius: 100,
-    color: Color.BLACK
 }
 
 
@@ -132,15 +119,14 @@ function fillMainCircleWithSmallCircles(mainCircle: Circle, smallCircleRadius: n
                 let randomColor1 = [Math.round(Math.random() * 255), Math.round(Math.random() * 255), Math.round(Math.random() * 255)] as COLOR
                 let randomColor2 = [Math.round(Math.random() * 255), Math.round(Math.random() * 255), Math.round(Math.random() * 255)] as COLOR
                 
-                let steps = 500
-
+                let steps = 5000
                 // console.log(randomColor1, randomColor2);
                 
                 let colorTransition1 = generateColorTransition(randomColor1, randomColor2, steps)
                 let colorTransition2 = generateColorTransition(randomColor2, randomColor1, steps)
                 let fullColorTransition = [...colorTransition1, ...colorTransition2]
 
-                circles.push({ x, y, radius: smallCircleRadius, color, transition: fullColorTransition });
+                circles.push({ x, y, radius: smallCircleRadius, color: randomColor1, transition: fullColorTransition });
             }
         }
     }
@@ -149,54 +135,110 @@ function fillMainCircleWithSmallCircles(mainCircle: Circle, smallCircleRadius: n
 }
 
 const smallCircleRadius = 10;
+
 const circles = fillMainCircleWithSmallCircles(mainCircle, smallCircleRadius);
 
 // Animation loop
-let frame = 1000;
+let frame = 0;
+const delayFactor = 5
+let delayCounter = 0
+
+function f1() {
+    // Clear the canvas
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    // drawCircle(mainCircle)
+
+    // Fill the main circle with smaller circles
+    circles.forEach( (circle) => {
+        if (delayCounter % delayFactor === 0) {
+            frame = (frame + 1) % circle.transition.length;
+        }
+
+        circle.color = circle.transition[frame]            
+        drawCircle(circle)
+    })
+    delayCounter++
+}
+
+
+
+
+function createColorTransition(n: number=2) {
+
+    const randomColor1 = [Math.round(Math.random() * 255), Math.round(Math.random() * 255), Math.round(Math.random() * 255)] as COLOR
+    const randomColor2 = [Math.round(Math.random() * 255), Math.round(Math.random() * 255), Math.round(Math.random() * 255)] as COLOR
+
+    let steps2 = 510
+    // console.log(randomColor1, randomColor2);
+    let max = 510
+    
+
+    const colorTransition0 = generateColorTransition(Color.WHITE, randomColor1, Math.round(Math.random() * max))
+    const colorTransition1 = generateColorTransition(randomColor1, randomColor2, Math.round(Math.random() * max))
+    const colorTransition2 = generateColorTransition(randomColor2, Color.BLACK, Math.round(Math.random() * max))
+    const colorTransition3 = generateColorTransition(Color.BLACK, randomColor1, Math.round(Math.random() * max))
+    const colorTransition4 = generateColorTransition(randomColor1, Color.WHITE, Math.round(Math.random() * max))
+
+    // const fullColorTransition = [...colorTransition1, ...colorTransition2]
+    const fullColorTransition = colorTransition0.concat(colorTransition1, colorTransition2, colorTransition3, colorTransition4)
+    return fullColorTransition
+}
+
+let size = 20
+
+let number_of_array = 10
+
+
+let colorTransitions: Color[] = []
+
+function generateArray(n: number) {
+    let tileWidth = canvas.width / n
+    let matters: Circle[] = []
+    
+
+    for (let i=0; i < n; i++) {
+        let x = tileWidth/2 + (tileWidth * i)
+        matters.push({x: x, y: 30, radius: 30, color: Color.BLACK, transition: createColorTransition()})
+
+        colorTransitions.push(createColorTransition())
+
+    }
+    return matters
+}
+
+let x = generateArray(10);
+
+(window as any).x = x;
+(window as any).ct = colorTransitions;
+
+let matters = x
+
+
+
+function f2() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // drawCircle(c1)
+
+    matters.forEach(element => {
+        if (delayCounter % delayFactor === 0) {
+            frame = (frame + 1) % element.transition.length;
+        }
+
+        element.color = element.transition[frame]
+        drawCircle(element)
+    });
+    delayCounter++
+}
+
 
 function animate2() {
     if (!ctx) return;
 
-    // Draw circle
-    {
-        // Clear the canvas
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        
-        // drawCircle(mainCircle)
+    // f1()
 
-        c1.color = fullTransition[frame];
-        // drawCircle(c1)
-
-        c2.color = fullTransition[frame]
-        // drawCircle(c2)
-
-        // Draw smaller circles inside the main circle
-        // const numCircles = 10;
-        // const smallCircleRadius = 30;
-        // drawCirclesInMainCircle(mainCircle, numCircles, smallCircleRadius, fullTransition);
-
-        // Fill the main circle with smaller circles
-        circles.forEach( (circle) => {
-            // console.log(circle.transition[frame]);
-            console.log(circle)
-            
-            let color = circle.transition[frame]
-
-            if (!color) {
-                circle.color = Color.BLACK
-            } else {
-                circle.color = color
-            }
-
-            
-            
-            drawCircle(circle)
-            frame = (frame + 1) % circle.transition.length;
-        })
-
-    }
-
-    // Increment the frame, looping back to the start if necessary
+    f2()
 
     // Request the next frame
     requestAnimationFrame(animate2);
