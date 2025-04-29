@@ -3,6 +3,8 @@ import pygame
 # from core import World, Cell, Food
 from core import World, Cell, Food
 from params import Color, _color
+import os
+import random
 
 """ 
 =====================================================================================
@@ -10,7 +12,7 @@ from params import Color, _color
 """
 
 # pygame setup
-size = 800
+size = 720
 DISPLAY_WIDTH = size
 DISPLAY_HEIGHT = size 
 
@@ -96,17 +98,55 @@ def render_face(cell: Cell, x_position, y_position):
 
 
 
+WORLD_SIZE = 300
+world = World(WORLD_SIZE) # size
 
-world = World(100) # size
+
+# Diffusion from center of canvas, born cells around center
+center = WORLD_SIZE // 2
+radius = 10  # Radius of the circle
+number_of_cells = 500
 
 
+# for x in range(number_of_cells):
+#     for y in range(number_of_cells):
+#         c = Cell(world, (center - number_of_cells + x, center - number_of_cells + y))
+
+# for i in range(number_of_cells):
+#     angle = 2 * np.pi * i / number_of_cells  # Divide the circle into equal parts
+#     x = center + int(radius * np.cos(angle))  # X-coordinate
+#     y = center + int(radius * np.sin(angle))  # Y-coordinate
+#     c = Cell(world, (x, y))
+
+for i in range(number_of_cells):
+    # Generate random spherical coordinates
+    theta = 2 * np.pi * random.random()  # Angle around the z-axis
+    phi = np.arccos(2 * random.random() - 1)  # Angle from the z-axis
+
+    # Convert spherical coordinates to Cartesian coordinates
+    x = center + int(radius * np.sin(phi) * np.cos(theta))  # X-coordinate
+    y = center + int(radius * np.sin(phi) * np.sin(theta))  # Y-coordinate
+
+    # Create the cell at the calculated position
+    c = Cell(world, (x, y))
+
+
+""" Save as an images """
+saving = False
+
+# To save as images file
+frame_count = 0
+
+# Create a directory to save the frames if it doesn't exist
+output_dir = "saved_frames"
+if not os.path.exists(output_dir):
+    os.makedirs(output_dir)
 
 
 """
 ==============================================================
 running
 """
-
 while running:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
@@ -116,17 +156,10 @@ while running:
 
     # render_world(world)
 
-    if world.get_avialable_spaces().size == 0: 
-        print("--------No available space--------")
-    else: 
-        c = Cell(world)
-
-        # while len(world.matter["Cell"]) < 3:
-        #     c = Cell(world)
-
-        # while len(world.matter["Food"]) < 30:
-        #     f = Food(world)
-
+    # if world.getFreeLocation().size == 0: 
+    #     print("--------No available space--------")
+    # else: 
+    #     c = Cell(world)
 
     
     for cell in world.matter["Cell"]:
@@ -149,10 +182,16 @@ while running:
         if type(food) is Food:
             render_matter(food, world, Color.YELLOW)
 
-
-    # print(f"face: {c1.face}, location: {c1.current_location} \n")
-    # print(f"world.spaces: \n {world.spaces} \n \n")
-
+    if saving is True:
+        filename = os.path.join(output_dir, f"frame_{frame_count:04d}.png")
+        pygame.image.save(screen, filename)
+        frame_count += 1
+    
     pygame.display.flip()
-    clock.tick(120)
+    clock.tick(30)
 pygame.quit()
+
+
+
+
+                
