@@ -14,7 +14,7 @@ Logic
 5. Cell can be born in the world.
 """
 
-type _location = None | np.ndarray[tuple[int, int], np.dtype[np.signedinteger]]
+type _location = None | np.ndarray[tuple[int, int], np.dtype[np.signedinteger]] | tuple[int, int]
 type _face = int | None | np.ndarray
 
 
@@ -49,7 +49,7 @@ class World:
         self.state_reward_map: dict = {"Cell": -1, 0: 1, "Food": 10, -1: -1}
 
 
-    def get_avialable_spaces(self) -> np.ndarray[_location, np.dtype[np.int_]]:
+    def getFreeLocation(self) -> np.ndarray[_location, np.dtype[np.int_]]:
         """Search a free space and give it back."""
         return np.stack(np.where(self.spaces == 0), axis=1)
 
@@ -60,7 +60,7 @@ class Matter:
     Proto type of life.
     Sub classes: Cell, Food
     """
-    def __init__(self, world: World) -> None:
+    def __init__(self, world: World, location: _location=None) -> None:
         self.world: World = world
         self.is_alive: bool = False 
         self.current_location: _location 
@@ -70,29 +70,34 @@ class Matter:
         self.name: str = '' 
         self.class_name: str = self.__class__.__qualname__
 
-        # If there's free space, then it can born.
-        available_space = self.get_space()
-        self.born(available_space)
+        # Set location or get random location
+        if location is None:
+            location = self.getRandomLocation()
+        else: 
+            location = location
+        self.born(location)
 
-    def get_space(self) -> _location | None:
-        available_spaces = self.world.get_avialable_spaces()
-        len_available_space = len(available_spaces)
-        if len_available_space == 0:
+    def getRandomLocation(self) -> _location | None:
+        freeLocations = self.world.getFreeLocation()
+        len_location = len(freeLocations)
+        if len_location == 0:
             return None
         else:
-            location = np.random.choice(len_available_space)
-            return available_spaces[location]
+            location = np.random.choice(len_location)
+            return freeLocations[location]
+
         
-    def born(self, available_space: _location) -> None:
-        if available_space is None:
-            raise Exception("No available space")
+    def born(self, location: _location) -> None:
+        if location is None:
+            raise Exception("No free location")
         else:
-            self.world.spaces[available_space[0], available_space[1]] = self 
+            self.world.spaces[location[0], location[1]] = self 
+            self.current_location = location
+
             self.world.matter[self.class_name].append(self) # for examples: 'Cell': [instacnes..]
             self.world.matter_count[self.class_name] += 1
 
             self.is_alive = True
-            self.current_location = available_space
             self.born_time = time.time()
             self.name = f"{self.class_name}_{self.world.matter_count[self.class_name]}"
             # self.color = Color.COLORS[np.random.choice(len(Color.COLORS))] 
@@ -141,13 +146,13 @@ class Cell(Matter):
     3. move: move somewhere
     4. eat
     """
-    def __init__(self, world: World) -> None:
+    def __init__(self, world: World, location: _location = None) -> None:
         # Only for cell(mover).
         self.face: _face = 1  # clock wise: front=0 -> right=1 -> back=2 -> left=3
         self.energy = 50
         self.MAX_ENERGY = 100
 
-        super().__init__(world)
+        super().__init__(world, location)
 
         # States: {0: Empty, 1: Other Cell, 2: Food, 3: Wall(out boundary)}
         self.states: list[_state]= [0, 1, 2, 3]
@@ -157,8 +162,8 @@ class Cell(Matter):
         # Memory
         self.memory = np.zeros((len(self.states), len(self.actions)), dtype=int) # [(state, reward of action)..]
 
-    def born(self, available_space) -> None:
-        super().born(available_space)
+    def born(self, location) -> None:
+        super().born(location)
         self.face = np.random.choice([0, 1, 2, 3])   
 
     def sense_front(self, sense_reach: int = 1) ->  _location | None:

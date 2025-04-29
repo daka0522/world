@@ -1,2 +1,10 @@
 node_modules
 under_dev
+
+saved_frames
+__pycache__
+.DS_Store
+
+output
+
+
