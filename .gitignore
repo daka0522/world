@@ -2,7 +2,7 @@ node_modules
 under_dev
 
 saved_frames
-__pycache__
+__pycache__/
 .DS_Store
 
 output

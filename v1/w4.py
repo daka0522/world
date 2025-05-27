@@ -158,5 +158,5 @@ while running:
 
 
     pygame.display.update()
-    clock.tick(1)
+    clock.tick(30)
 pygame.quit()

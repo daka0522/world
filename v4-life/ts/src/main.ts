@@ -1,5 +1,3 @@
-// import * as tf from '@tensorflow/tfjs';
-
 const canvas = document.getElementById("canvas") as HTMLCanvasElement
 const ctx = canvas.getContext("2d")
 
@@ -16,8 +14,8 @@ class Color {
 }
 
 function drawGrid(color: number[], tile=10): void {
-    let tileWidth = canvas.width / tile
-    let tileHeight = canvas.height / tile
+    const tileWidth = canvas.width / tile
+    const tileHeight = canvas.height / tile
 
     if (!ctx) return
 
@@ -50,7 +48,6 @@ function interpolateColor(color1: [number, number, number], color2: [number, num
     }
     return `rgb(${result[0]}, ${result[1]}, ${result[2]})`;
 }
-
 
 
 function linspace(start: number, stop: number, num: number): number[] {
@@ -101,7 +98,6 @@ let mainCircle: Circle = {
     y: canvas.height/2,
     radius: canvas.width/2,
     color: Color.BLACK,
-    
 }
 
 
@@ -130,12 +126,10 @@ function fillMainCircleWithSmallCircles(mainCircle: Circle, smallCircleRadius: n
             }
         }
     }
-
     return circles
 }
 
 const smallCircleRadius = 10;
-
 const circles = fillMainCircleWithSmallCircles(mainCircle, smallCircleRadius);
 
 // Animation loop
@@ -153,8 +147,7 @@ function f1() {
     circles.forEach( (circle) => {
         if (delayCounter % delayFactor === 0) {
             frame = (frame + 1) % circle.transition.length;
-        }
-
+        } 
         circle.color = circle.transition[frame]            
         drawCircle(circle)
     })
@@ -162,7 +155,7 @@ function f1() {
 }
 
 
-
+// f2
 
 function createColorTransition(n: number=2) {
 
@@ -186,7 +179,6 @@ function createColorTransition(n: number=2) {
 }
 
 let size = 20
-
 let number_of_array = 10
 
 
@@ -196,7 +188,6 @@ function generateArray(n: number) {
     let tileWidth = canvas.width / n
     let matters: Circle[] = []
     
-
     for (let i=0; i < n; i++) {
         let x = tileWidth/2 + (tileWidth * i)
         matters.push({x: x, y: 30, radius: 30, color: Color.BLACK, transition: createColorTransition()})
@@ -232,16 +223,15 @@ function f2() {
     delayCounter++
 }
 
-
-function animate2() {
+function animate() {
     if (!ctx) return;
 
-    // f1()
+    f1()
 
-    f2()
+    // f2()
 
     // Request the next frame
-    requestAnimationFrame(animate2);
+    requestAnimationFrame(animate);
 }
 
 
@@ -249,7 +239,7 @@ function main() {
     // drawGrid(Color.BLACK)
 
     // Start the animation
-    animate2();
+    animate();
 }
 
-// main()
+main()

@@ -34,7 +34,7 @@ end_line = 50
 # Gradients
 
 c0 = np.linspace(WHITE, colors[0], end_line, dtype=np.uint8)
-c1 = np.linspace(colors[0], colors[1], step1, dtype=np.uint8)
+c1: ndarray[Any, dtype[Any]] = np.linspace(colors[0], colors[1], step1, dtype=np.uint8)
 c2 = np.linspace(colors[1], colors[2], step2, dtype=np.uint8)
 c3 = np.linspace(colors[2], colors[1], step2, dtype=np.uint8)
 c4 = np.linspace(colors[1], colors[0], step1, dtype=np.uint8)
