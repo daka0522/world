@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>핵분열 시뮬레이션, Fission</title>
+  <style>
+    canvas { background: #000; display: block; margin: auto; }
+  </style>
+</head>
+<body>
+<canvas id="sim" width="800" height="600"></canvas>
+<script>
+const canvas = document.getElementById('sim');
+const ctx = canvas.getContext('2d');
+
+let atoms = [];
+let neutrons = [];
+
+class Atom {
+  constructor(x, y) {
+    this.x = x;
+    this.y = y;
+    this.radius = 20;
+    this.split = false;
+  }
+  draw() {
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+    ctx.fillStyle = this.split ? 'gray' : 'green';
+    ctx.fill();
+  }
+}
+
+class Neutron {
+  constructor(x, y, dx, dy) {
+    this.x = x;
+    this.y = y;
+    this.dx = dx;
+    this.dy = dy;
+    this.radius = 5;
+  }
+  move() {
+    this.x += this.dx;
+    this.y += this.dy;
+  }
+  draw() {
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+    ctx.fillStyle = 'white';
+    ctx.fill();
+  }
+}
+
+// 초기 우라늄 원자 10개
+for (let i = 0; i < 10; i++) {
+  atoms.push(new Atom(Math.random() * 700 + 50, Math.random() * 500 + 50));
+}
+
+// 마우스로 중성자 발사
+canvas.addEventListener('click', e => {
+  const rect = canvas.getBoundingClientRect();
+  const nx = e.clientX - rect.left;
+  const ny = e.clientY - rect.top;
+  neutrons.push(new Neutron(nx, ny, 0, -2));
+});
+
+function animate() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  atoms.forEach(atom => atom.draw());
+
+  for (let i = neutrons.length - 1; i >= 0; i--) {
+    const n = neutrons[i];
+    n.move();
+    n.draw();
+
+    // 충돌 판정
+    for (let j = 0; j < atoms.length; j++) {
+      const a = atoms[j];
+      const dx = n.x - a.x;
+      const dy = n.y - a.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (!a.split && dist < a.radius + n.radius) {
+        a.split = true;
+        neutrons.push(
+          new Neutron(a.x, a.y, 2, 1),
+          new Neutron(a.x, a.y, -2, 1),
+          new Neutron(a.x, a.y, 0, 2)
+        );
+      }
+    }
+  }
+
+  requestAnimationFrame(animate);
+}
+
+animate();
+</script>
+</body>
+</html>

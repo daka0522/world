@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <title>핵융합 시뮬레이션</title>
+  <style>
+    canvas {
+      background: #000;
+      display: block;
+      margin: auto;
+    }
+  </style>
+</head>
+
+<body>
+  <canvas id="fusionCanvas" width="800" height="600"></canvas>
+  <script>
+    const canvas = document.getElementById('fusionCanvas');
+    const ctx = canvas.getContext('2d');
+
+    class Particle {
+      constructor(x, y, dx, dy, type, color, lifespan = null) {
+        this.x = x;
+        this.y = y;
+        this.dx = dx;
+        this.dy = dy;
+        this.radius = 10;
+        this.type = type; // 'D', 'T', 'He', 'n', 'energy'
+        this.color = color;
+        this.lifespan = lifespan; // 수명 프레임
+        this.merged = false;
+      }
+
+      move() {
+        this.x += this.dx;
+        this.y += this.dy;
+        if (this.lifespan !== null) this.lifespan--;
+      }
+
+      draw() {
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        ctx.fillStyle = this.color;
+        ctx.fill();
+      }
+    }
+
+    let particles = [];
+
+    // 초기 수소 원자들
+    particles.push(new Particle(100, 300, 1.5, 0, 'D', 'cyan')); // 중수소
+    particles.push(new Particle(700, 300, -1.5, 0, 'T', 'lime')); // 삼중수소
+
+    function fusionReaction(p1, p2) {
+      const midX = (p1.x + p2.x) / 2;
+      const midY = (p1.y + p2.y) / 2;
+
+      // 헬륨 생성
+      particles.push(new Particle(midX, midY, Math.random() * 2 - 1, Math.random() * 2 - 1, 'He', 'orange'));
+
+      // 중성자 생성
+      particles.push(new Particle(midX, midY, Math.random() * 3 - 1.5, Math.random() * 3 - 1.5, 'n', 'white'));
+
+      // 에너지 폭발 효과 (간단한 시각 효과)
+      // 에너지 폭발 효과
+      for (let i = 0; i < 20; i++) {
+        particles.push(new Particle(
+          midX,
+          midY,
+          Math.cos(i * Math.PI / 10) * 2,
+          Math.sin(i * Math.PI / 10) * 2,
+          'energy',
+          'yellow',
+          1120 // lifespan, frames
+        ));
+      }
+
+      p1.merged = true;
+      p2.merged = true;
+    }
+
+    function animate() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.move();
+        p.draw();
+
+        // 두 수소 입자가 충돌하면 핵융합
+        for (let j = i - 1; j >= 0; j--) {
+          const other = particles[j];
+          if ((p.type === 'D' && other.type === 'T' || p.type === 'T' && other.type === 'D') &&
+            !p.merged && !other.merged) {
+            const dx = p.x - other.x;
+            const dy = p.y - other.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist < p.radius + other.radius) {
+              fusionReaction(p, other);
+            }
+          }
+        }
+
+
+        // 에너지 입자는 일정 시간 후 제거
+        if (p.type === 'energy' && p.lifespan !== null && p.lifespan <= 0) {
+          particles.splice(i, 1);
+          continue
+        }
+      }
+
+      // 병합된 입자 제거
+      particles = particles.filter(p => !p.merged);
+
+      requestAnimationFrame(animate);
+    }
+
+    animate();
+  </script>
+</body>
+
+</html>

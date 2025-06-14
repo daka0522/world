@@ -57,7 +57,7 @@ const box = [size, size, size]
 
 const G = 1
 const REPULSION = 500
-const FRICTION = 0.999
+const FRICTION = 0.99
 
 
 const cells: Array<Cell> = []
@@ -196,9 +196,9 @@ function main() {
     const velMax = 5 // it is 10 by mutiply with Math.random()
     const velMin = -5
 
-    const numberOfCells = 50
+    const numberOfCells = 150
     for (let i = 0; i < numberOfCells; i++) {
-        const radius = Math.random() * 30 - 10
+        const radius = Math.random() * 35 - 15
         new Cell(
             new THREE.Vector3(Math.random() * box[0], Math.random() * box[1], Math.random() * box[2]),
             new THREE.Vector3(Math.random() * velMax - velMin, Math.random() * velMax - velMin, Math.random() * velMax - velMin),
