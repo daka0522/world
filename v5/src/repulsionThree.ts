@@ -1,22 +1,22 @@
 import * as THREE from "three"
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { log } from "three/tsl";
+import { drawWorldBox } from "./drawWorldBox";
 
 /* Settings */
 const canvas = document.querySelector('#c') as HTMLCanvasElement
-canvas.width = 700
-canvas.height = 700
+canvas.width = window.innerWidth
+canvas.height = window.innerHeight
 
 const renderer = new THREE.WebGLRenderer({ canvas });
-const camera = new THREE.PerspectiveCamera(75, 1, 1, 500);
-camera.position.set(20, 0, 20);
+const camera = new THREE.PerspectiveCamera(75, canvas.width/canvas.height, 0.1, 2000);
+camera.position.set(350, 250, 350);
 camera.lookAt(0, 0, 0);
 
 const scene = new THREE.Scene();
 
 function orbitControls() {
     const controls = new OrbitControls(camera, canvas);
-    controls.target.set(0, -20, 0);
+    controls.target.set(0, -50, 0);
     controls.minDistance = 200
 
     controls.update();
@@ -26,19 +26,28 @@ function orbitControls() {
     /* Light settings */
 
     const color = 0xFFFFFF;
-    const intensity = 1;
+    const intensity = 5;
     const light = new THREE.DirectionalLight(color, intensity);
 
-    light.position.set(0, 20, 0);
+    light.position.set(50, 50, 0);
     light.target.position.set(0, 0, 0);
     scene.add(light);
     scene.add(light.target);
 
 
-    const ambientLight = new THREE.AmbientLight(color, 2)
+    const ambientLight = new THREE.AmbientLight(color, 0.1)
     scene.add(ambientLight)
 }
 
+/* Info board */
+
+function createInfos(): HTMLElement {
+    const infoElem = document.querySelector("#info") as HTMLElement
+    const info = document.createElement("p")
+    // info.innerText = text 
+    infoElem.appendChild(info)
+    return info
+}
 
 /* Codes */
 // Set boundary box
@@ -46,26 +55,12 @@ const size = 200
 const box = [size, size, size]
 
 
-const G = 5
-const REPULSION = 1000
-const FRICTION = 0.99
+const G = 1
+const REPULSION = 500
+const FRICTION = 0.999
 
 
-// const sphereGeometry = new THREE.SphereGeometry(10, 32, 32); // Smaller spheres
 const cells: Array<Cell> = []
-
-// function createSphere(geometry, x, y, z) {
-//     const randomColor = () => new THREE.Color(Math.random(), Math.random(), Math.random());
-//     const material = new THREE.MeshPhongMaterial({ color: randomColor() });
-//     const sphere = new THREE.Mesh(geometry, material);
-
-//     sphere.position.set(x, y, z);
-//     scene.add(sphere);
-
-//     spheres.push(sphere)
-
-//     return sphere;
-// }
 
 class Cell {
     position: THREE.Vector3
@@ -73,56 +68,64 @@ class Cell {
     accelation: THREE.Vector3
     radius: number
     mass: number
-
+    mesh!: THREE.Mesh
 
     constructor(position: THREE.Vector3, velocity: THREE.Vector3, radius: number, mass: number) {
         this.position = position
         this.velocity = velocity
         this.accelation = new THREE.Vector3(0, 0, 0)
         this.radius = radius
-        this.mass = mass
+        this.mass = radius
 
-        cells.push(this)
-
-        console.log(this.position);
-        
+        this.createSphere()
     }
 
-    draw() {
+    private createSphere() {
         const sphereGeometry = new THREE.SphereGeometry(this.radius, 32, 32);
-
         const randomColor = () => new THREE.Color(Math.random(), Math.random(), Math.random());
         const material = new THREE.MeshPhongMaterial({ color: randomColor() });
-        const sphere = new THREE.Mesh(sphereGeometry, material);
+        this.mesh = new THREE.Mesh(sphereGeometry, material);
 
-        sphere.position.copy(this.position)
-        scene.add(sphere)
-        
+        this.mesh.position.copy(this.position)
+        scene.add(this.mesh)
+        cells.push(this)
     }
+
     update() {
-        console.log(this.position);
-        
         // Update position based on velocity
-        this.velocity = this.velocity.add(this.accelation)
-        this.velocity = this.velocity.multiplyScalar(FRICTION)
-        // this.position.x += this.velocity.x
-        // this.position.y += this.velocity.y
-        this.position.add(this.velocity)
+        this.velocity = this.velocity.add(this.accelation).multiplyScalar(FRICTION)
+        this.position = this.position.add(this.velocity)
         this.accelation.set(0, 0, 0)
 
-        // Bounce off walls with smoother boundary checking
+        const collisionFactor = -1
+        // Ensure the cell stays within the box
+        if (this.position.x + this.radius > box[0]) {
+            this.position.x = box[0] - this.radius; // Correct position
+            this.velocity.x *= collisionFactor // Reverse and reduce velocity
+        }
+        if (this.position.x - this.radius < -box[0]) {
+            this.position.x = -box[0] + this.radius;
+            this.velocity.x *= collisionFactor
+        }
+        if (this.position.y + this.radius > box[1]) {
+            this.position.y = box[1] - this.radius;
+            this.velocity.y *= collisionFactor
+        }
+        if (this.position.y - this.radius < -box[1]) {
+            this.position.y = -box[1] + this.radius;
+            this.velocity.y *= collisionFactor
+        }
+        if (this.position.z + this.radius > box[2]) {
+            this.position.z = box[2] - this.radius;
+            this.velocity.z *= collisionFactor
+        }
+        if (this.position.z - this.radius < -box[2]) {
+            this.position.z = -box[2] + this.radius;
+            this.velocity.z *= collisionFactor
+        }
 
-        if (this.position.x + this.radius > box[0] || this.position.x - this.radius < -box[0]) {
-            this.velocity.x *= -1
-        }
-        if (this.position.y + this.radius > box[1] || this.position.y - this.radius < -box[1]) {
-            this.velocity.y *= -1
-        }
-        if (this.position.z + this.radius > box[2] || this.position.z - this.radius < -box[2]) {
-            this.velocity.z *= -1
-        }
-        // this.position.y = Math.max(0, Math.min(canvas.height - this.radius, this.position.y))
-        // this.position.x = Math.max(0, Math.min(canvas.width - this.radius, this.position.x))
+        // Update the mesh position
+        this.mesh.position.copy(this.position)
     }
 
     private applyForce(force: THREE.Vector3) {
@@ -156,7 +159,7 @@ class Cell {
         const gravity = direction.clone().multiplyScalar(G * this.mass * other.mass / distance ** 2)
         this.applyForce(gravity)
 
-        if (distance < this.radius) {
+        if (distance < this.radius * 2) {
             const repulsion = REPULSION * this.mass
             this.applyForce(direction.clone().multiplyScalar(-repulsion / distance ** 2))
         }
@@ -164,15 +167,22 @@ class Cell {
 }
 
 
-function animate() {
-    cells.forEach(  cell => {
-        cell.update() 
+const c1info1 = createInfos()
+const c1info2 = createInfos()
 
-        cells.forEach( otherCell => {
+function animate() {
+    cells.forEach(cell => {
+        cell.update()
+
+        cells.forEach(otherCell => {
             if (cell !== otherCell) {
                 cell.interactWith(otherCell)
             }
         })
+
+        // c1info1.innerText = "position: " + cell.position.toArray().map(v => v.toFixed(4)).join(", ")
+        // c1info2.innerText = "velocity: " + cell.velocity.toArray().map(v => v.toFixed(4)).join(", ")
+
     })
 
     renderer.render(scene, camera);
@@ -181,33 +191,24 @@ function animate() {
 function main() {
     orbitControls()
 
-    // createSphere(sphereGeometry, 0, 0, 0)
+    drawWorldBox(scene, size, "rgb(255, 255, 255)")
 
-    for (let i = 0; i < 5; i++) {
-        const cell = new Cell(
+    const velMax = 5 // it is 10 by mutiply with Math.random()
+    const velMin = -5
+
+    const numberOfCells = 50
+    for (let i = 0; i < numberOfCells; i++) {
+        const radius = Math.random() * 30 - 10
+        new Cell(
             new THREE.Vector3(Math.random() * box[0], Math.random() * box[1], Math.random() * box[2]),
-            new THREE.Vector3(Math.random() * 10 - 5, Math.random() * 10 - 5, Math.random() * 10 - 5),
-            20,
-            1 + Math.random()
+            new THREE.Vector3(Math.random() * velMax - velMin, Math.random() * velMax - velMin, Math.random() * velMax - velMin),
+            radius,
+            radius
         )
-        // console.log(cells);
-        cell.draw()
-        
     }
 
-    // cells.forEach(cell => cell.update())
-
-    // for (let i = 0; i < cells.length; i++) {
-    //     for (let j = 0; j < cells.length; j++) {
-    //         if (i != j) {
-    //             cells[i].interactWith(cells[j])
-    //         }
-    //     }
-    // }
 
 
-    // // Draw all cells
-    // cells.forEach(cell => cell.draw())
 
     renderer.setAnimationLoop(animate);
 }
