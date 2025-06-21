@@ -54,11 +54,9 @@ function createInfos(): HTMLElement {
 const size = 200
 const box = [size, size, size]
 
-
 const G = 1
 const REPULSION = 500
 const FRICTION = 0.99
-
 
 const cells: Array<Cell> = []
 
@@ -206,8 +204,8 @@ class Cell {
 }
 
 
-const c1info1 = createInfos()
-const c1info2 = createInfos()
+// const c1info1 = createInfos()
+// const c1info2 = createInfos()
 
 function animate() {
     cells.forEach(cell => {
@@ -238,7 +236,7 @@ function main() {
     const velMax = 5 // it is 10 by mutiply with Math.random()
     const velMin = -5
 
-    const numberOfCells = 30
+    const numberOfCells = 50
     for (let i = 0; i < numberOfCells; i++) {
         const radius = Math.random() * 35 - 15
         new Cell(
