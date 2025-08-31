@@ -13,6 +13,11 @@ let world = new World(worldSize);
 // --- Visualization Setup (Placeholder) ---
 const canvas = document.getElementById("worldCanvas") as HTMLCanvasElement
 
+
+// Canvas size setup
+canvas.width = window.innerWidth
+canvas.height = window.innerHeight
+
 let tileWidth = canvas.width / world.width;
 let tileHeight = canvas.height / world.height;
 
