@@ -89,6 +89,7 @@ abstract class Matter {
             // Decide how to handle no space - maybe throw error or return null/undefined
         }
     }
+
     born(location: _Location): void {
         if (!location || this.world.spaces[location[0]][location[1]] !== 0) {
             console.error("Cannot born Matter at occupied or invalid location: ", location)
@@ -336,7 +337,6 @@ class Cell extends Matter {
             this.turnFace();
             return;
        }
-
 
        // Clear old location in world grid
        if (this.currentLocation) {
